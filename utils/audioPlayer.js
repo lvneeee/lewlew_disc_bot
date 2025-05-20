@@ -48,6 +48,12 @@ function clearDisconnectTimeout(guildId) {
   }
 }
 
+function clearPlayer(guildId) {
+  if (players.has(guildId)) {
+    players.delete(guildId);
+  }
+}
+
 module.exports = {
   createPlayer,
   getPlayer,
@@ -56,5 +62,6 @@ module.exports = {
   clearConnection,
   setDisconnectTimeout,
   clearDisconnectTimeout,
+  clearPlayer,
   AudioPlayerStatus,
 };

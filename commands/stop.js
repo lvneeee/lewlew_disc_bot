@@ -1,4 +1,4 @@
-const { getPlayer, getConnection, clearConnection, clearDisconnectTimeout } = require('../utils/audioPlayer');
+const { getPlayer, getConnection, clearConnection, clearDisconnectTimeout, clearPlayer } = require('../utils/audioPlayer');
 const { clearQueue } = require('../utils/audioQueue');
 
 module.exports = {
@@ -8,7 +8,11 @@ module.exports = {
     const connection = getConnection(message.guild.id);
 
     clearQueue(message.guild.id);
-    player.stop();
+    
+    if (player) {
+      player.stop();
+      clearPlayer(message.guild.id);  // Xóa player cũ
+    }
 
     if (connection) {
       connection.destroy();
