@@ -16,7 +16,6 @@ const commandFiles = fs.readdirSync(path.join(__dirname, 'commands')).filter(fil
 
 for (const file of commandFiles) {
   const command = require(`./commands/${file}`);
-  // Sử dụng command.data.name thay vì command.name cho slash commands
   client.commands.set(command.data.name, command);
 }
 
@@ -46,9 +45,15 @@ client.on('interactionCreate', async interaction => {
 
 client.once('ready', async () => {
   console.log(`Bot đã sẵn sàng: ${client.user.tag}`);
-  
-  // Đăng ký slash commands khi bot khởi động
-  await deploySlashCommands(process.env.DISCORD_TOKEN, process.env.CLIENT_ID);
 });
+
+// Đăng ký global commands
+(async () => {
+  try {
+    await deploySlashCommands(process.env.DISCORD_TOKEN, process.env.CLIENT_ID);
+  } catch (error) {
+    console.error('Lỗi khi đăng ký commands:', error);
+  }
+})();
 
 client.login(process.env.DISCORD_TOKEN);

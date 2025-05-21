@@ -45,15 +45,19 @@ module.exports = {
         .setDescription('URL của video hoặc playlist YouTube')
         .setRequired(true)
     ),
+  async execute(interaction, isFromSearch = false, directUrl = null) {
+    // Only defer if this is a direct command, not from search
+    if (!isFromSearch) {
+      await interaction.deferReply();
+    }
 
-  async execute(interaction) {
-    await interaction.deferReply(); // Vì có thể mất thời gian để xử lý
-
-    const url = interaction.options.getString('url');
+    const url = directUrl || interaction.options.getString('url');
     const voiceChannel = interaction.member.voice.channel;
     
     if (!voiceChannel) {
-      return interaction.editReply('❗ Bạn phải vào voice channel trước.');
+      return isFromSearch 
+        ? interaction.followUp('❗ Bạn phải vào voice channel trước.')
+        : interaction.editReply('❗ Bạn phải vào voice channel trước.');
     }
 
     let connection = getConnection(interaction.guildId);
@@ -174,15 +178,29 @@ module.exports = {
         if (
           player.state.status !== AudioPlayerStatus.Playing &&
           player.state.status !== AudioPlayerStatus.Paused
-        ) {
-          await interaction.editReply(`✅ Đã thêm vào hàng đợi và bắt đầu phát: **${title}**`);
+        ) {          const message = `✅ Đã thêm vào hàng đợi và bắt đầu phát: **${title}**`;
+          if (isFromSearch) {
+            await interaction.followUp(message);
+          } else {
+            await interaction.editReply(message);
+          }
           await playNext(interaction.guildId);
         } else {
-          await interaction.editReply(`✅ Đã thêm vào hàng đợi: **${title}**`);
+          const message = `✅ Đã thêm vào hàng đợi: **${title}**`;
+          if (isFromSearch) {
+            await interaction.followUp(message);
+          } else {
+            await interaction.editReply(message);
+          }
         }
       } catch (err) {
         console.error(err);
-        await interaction.editReply('❌ Lỗi khi thêm bài hát.');
+        const message = '❌ Lỗi khi thêm bài hát.';
+        if (isFromSearch) {
+          await interaction.followUp(message);
+        } else {
+          await interaction.editReply(message);
+        }
       }
     }
   },
