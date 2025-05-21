@@ -83,8 +83,53 @@ function getPlaylistVideos(playlistUrl) {
   });
 }
 
+async function searchVideos(query, limit = 5) {
+  return new Promise((resolve, reject) => {
+    const process = spawn(ytdlpPath, [
+      'ytsearch' + limit + ':' + query,
+      '--flat-playlist',
+      '--dump-json'
+    ]);
+
+    let dataBuffer = '';
+
+    process.stdout.on('data', (chunk) => {
+      dataBuffer += chunk.toString();
+    });
+
+    process.stderr.on('data', (data) => {
+      console.error(`yt-dlp stderr: ${data}`);
+    });
+
+    process.on('close', (code) => {
+      if (code === 0) {
+        try {
+          const results = dataBuffer
+            .split('\n')
+            .filter(line => line.trim())
+            .map(line => {
+              const data = JSON.parse(line);
+              return {
+                title: data.title,
+                url: `https://www.youtube.com/watch?v=${data.id}`,
+                duration: data.duration,
+                thumbnail: data.thumbnail
+              };
+            });
+          resolve(results);
+        } catch (e) {
+          reject(new Error('Lỗi khi xử lý kết quả tìm kiếm'));
+        }
+      } else {
+        reject(new Error(`yt-dlp exited with code ${code}`));
+      }
+    });
+  });
+}
+
 module.exports = {
   getAudioStream,
   getVideoInfo,
   getPlaylistVideos,
+  searchVideos
 };
