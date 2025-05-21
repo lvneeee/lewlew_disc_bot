@@ -11,7 +11,7 @@ const {
   getAudioStream,
   getVideoInfo,
   getPlaylistVideos,
-} = require('../utils/ytDlp');
+} = require('../utils/ytdlp');
 
 const {
   enqueue,
@@ -63,6 +63,8 @@ module.exports = {
             if (conn) {
               conn.destroy();
               clearConnection(guildId);
+              // Thêm dòng này để xóa player khi disconnect
+              clearPlayer(guildId);
             }
           },
           2 * 60 * 1000
