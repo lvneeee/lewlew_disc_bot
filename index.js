@@ -2,40 +2,53 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-
-const PREFIX = process.env.PREFIX || '!';
+const { deploySlashCommands } = require('./utils/deployCommands');
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
+// Khởi tạo collection để lưu commands
 client.commands = new Collection();
 
-const commandFiles = fs.readdirSync(path.join(__dirname, 'commands'));
+// Đọc tất cả các file commands
+const commandFiles = fs.readdirSync(path.join(__dirname, 'commands')).filter(file => file.endsWith('.js'));
+
 for (const file of commandFiles) {
   const command = require(`./commands/${file}`);
-  client.commands.set(command.name, command);
+  // Sử dụng command.data.name thay vì command.name cho slash commands
+  client.commands.set(command.data.name, command);
 }
 
-client.on('messageCreate', async (message) => {
-  if (!message.content.startsWith(PREFIX) || message.author.bot) return;
+// Xử lý slash commands
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isChatInputCommand()) return;
 
-  const args = message.content.slice(PREFIX.length).trim().split(/ +/);
-  const commandName = args.shift().toLowerCase();
-
-  const command = client.commands.get(commandName);
+  const command = client.commands.get(interaction.commandName);
   if (!command) return;
 
   try {
-    await command.execute(message, args);
-  } catch (err) {
-    console.error(err);
-    message.reply('Lỗi khi thực thi lệnh!');
+    await command.execute(interaction);
+  } catch (error) {
+    console.error(error);
+    const reply = {
+      content: 'Lỗi khi thực thi lệnh!',
+      ephemeral: true
+    };
+    
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp(reply);
+    } else {
+      await interaction.reply(reply);
+    }
   }
 });
 
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log(`Bot đã sẵn sàng: ${client.user.tag}`);
+  
+  // Đăng ký slash commands khi bot khởi động
+  await deploySlashCommands(process.env.DISCORD_TOKEN, process.env.CLIENT_ID);
 });
 
 client.login(process.env.DISCORD_TOKEN);
