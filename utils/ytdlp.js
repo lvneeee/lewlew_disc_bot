@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
-const ytdlpPath = process.env.YTDLP_PATH || '../yt-dlp.exe';
+const path = require('path');
+const ytdlpPath = process.env.YTDLP_PATH || path.join(__dirname, '../yt-dlp.exe');
 
 async function getAudioStream(url) {
   return new Promise((resolve, reject) => {
