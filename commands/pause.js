@@ -1,20 +1,24 @@
+const { SlashCommandBuilder } = require('discord.js');
 const { AudioPlayerStatus } = require('@discordjs/voice');
 const { getPlayer } = require('../utils/audioPlayer');
 
 module.exports = {
-  name: 'pause',
-  async execute(message) {
-    const player = getPlayer(message.guild.id);
+  data: new SlashCommandBuilder()
+    .setName('pause')
+    .setDescription('Tạm dừng phát nhạc'),
+
+  async execute(interaction) {
+    const player = getPlayer(interaction.guildId);
 
     if (!player || player.state.status !== AudioPlayerStatus.Playing) {
-      return message.reply('❗ Không có nhạc nào đang phát để tạm dừng.');
+      return interaction.reply('❗ Không có nhạc nào đang phát để tạm dừng.');
     }
 
     const success = player.pause();
     if (success) {
-      message.reply('⏸️ Đã tạm dừng phát nhạc.');
+      interaction.reply('⏸️ Đã tạm dừng phát nhạc.');
     } else {
-      message.reply('⚠️ Không thể tạm dừng.');
+      interaction.reply('⚠️ Không thể tạm dừng.');
     }
   },
 };

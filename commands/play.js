@@ -1,3 +1,4 @@
+const { SlashCommandBuilder } = require('discord.js');
 const {
   joinVoiceChannel,
   createAudioResource,
@@ -28,25 +29,41 @@ const {
   clearConnection,
   setDisconnectTimeout,
   clearDisconnectTimeout,
+  clearPlayer,
   AudioPlayerStatus,
 } = require('../utils/audioPlayer');
 
-module.exports = {
-  name: 'play',
-  async execute(message, args) {
-    const url = args[0];
-    if (!url) return message.reply('❗ Hãy cung cấp URL YouTube!');
-    const voiceChannel = message.member.voice.channel;
-    if (!voiceChannel) return message.reply('❗ Bạn phải vào voice channel trước.');
+const { setVolumeTransformer } = require('../utils/volumeControl');
 
-    let connection = getConnection(message.guild.id);
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('play')
+    .setDescription('Phát nhạc từ YouTube')
+    .addStringOption(option =>
+      option
+        .setName('url')
+        .setDescription('URL của video hoặc playlist YouTube')
+        .setRequired(true)
+    ),
+
+  async execute(interaction) {
+    await interaction.deferReply(); // Vì có thể mất thời gian để xử lý
+
+    const url = interaction.options.getString('url');
+    const voiceChannel = interaction.member.voice.channel;
+    
+    if (!voiceChannel) {
+      return interaction.editReply('❗ Bạn phải vào voice channel trước.');
+    }
+
+    let connection = getConnection(interaction.guildId);
     if (!connection) {
       connection = joinVoiceChannel({
         channelId: voiceChannel.id,
-        guildId: message.guild.id,
-        adapterCreator: message.guild.voiceAdapterCreator,
+        guildId: interaction.guildId,
+        adapterCreator: interaction.guild.voiceAdapterCreator,
       });
-      setConnection(message.guild.id, connection);
+      setConnection(interaction.guildId, connection);
     }
 
     // Hàm phát bài tiếp theo, truyền guildId để tái sử dụng
@@ -63,7 +80,6 @@ module.exports = {
             if (conn) {
               conn.destroy();
               clearConnection(guildId);
-              // Thêm dòng này để xóa player khi disconnect
               clearPlayer(guildId);
             }
           },
@@ -88,6 +104,9 @@ module.exports = {
 
         const volumeTransformer = new prism.VolumeTransformer({ type: 's16le', volume: 1 });
         ffmpeg.stdout.pipe(volumeTransformer);
+        
+        // Lưu volumeTransformer để có thể điều chỉnh âm lượng sau này
+        setVolumeTransformer(guildId, volumeTransformer);
 
         const resource = createAudioResource(volumeTransformer, {
           inputType: StreamType.Raw,
@@ -97,31 +116,27 @@ module.exports = {
         const player = getPlayer(guildId);
         player.play(resource);
 
-        const textChannel = message.channel;
-        if (textChannel) {
-          textChannel.send(`🎶 Đang phát: **${next.title}**`);
+        // Chỉ gửi thông báo nếu không phải bài đầu tiên
+        if (player.state.status === AudioPlayerStatus.Playing) {
+          interaction.channel.send(`🎶 Đang phát: **${next.title}**`);
         }
       } catch (err) {
         console.error('Lỗi phát bài:', err);
-        const textChannel = message.channel;
-        if (textChannel) {
-          textChannel.send(`❌ Không thể phát bài: ${next.title || next.url}`);
-        }
+        interaction.channel.send(`❌ Không thể phát bài: ${next.title || next.url}`);
         playNext(guildId); // tiếp tục bài tiếp theo nếu lỗi
       }
     };
 
-    let player = getPlayer(message.guild.id);
+    let player = getPlayer(interaction.guildId);
     if (!player) {
-      // Tạo player mới với callback playNext
-      player = createPlayer(message.guild.id, playNext);
+      player = createPlayer(interaction.guildId, playNext);
       connection.subscribe(player);
     }
 
     // Nếu player đang paused thì resume (unpause)
     if (player.state.status === AudioPlayerStatus.Paused) {
       player.unpause();
-      return message.reply('▶️ Tiếp tục phát nhạc.');
+      return interaction.editReply('▶️ Tiếp tục phát nhạc.');
     }
 
     const isPlaylist = url.includes('list=');
@@ -129,20 +144,22 @@ module.exports = {
     if (isPlaylist) {
       try {
         const videos = await getPlaylistVideos(url);
-        if (videos.length === 0) return message.reply('❌ Không tìm thấy video trong playlist.');
+        if (videos.length === 0) {
+          return interaction.editReply('❌ Không tìm thấy video trong playlist.');
+        }
 
-        videos.forEach(video => enqueue(message.guild.id, video));
-        message.reply(`✅ Đã thêm ${videos.length} bài từ playlist vào hàng đợi.`);
+        videos.forEach(video => enqueue(interaction.guildId, video));
+        await interaction.editReply(`✅ Đã thêm ${videos.length} bài từ playlist vào hàng đợi.`);
 
         if (
           player.state.status !== AudioPlayerStatus.Playing &&
           player.state.status !== AudioPlayerStatus.Paused
         ) {
-          await playNext(message.guild.id);
+          await playNext(interaction.guildId);
         }
       } catch (err) {
         console.error(err);
-        message.reply('❌ Lỗi khi lấy playlist.');
+        await interaction.editReply('❌ Lỗi khi lấy playlist.');
       }
     } else {
       try {
@@ -152,19 +169,20 @@ module.exports = {
         } catch (e) {
           console.warn('Không lấy được tiêu đề video:', e.message);
         }
-        enqueue(message.guild.id, { url, title });
+        enqueue(interaction.guildId, { url, title });
 
         if (
           player.state.status !== AudioPlayerStatus.Playing &&
           player.state.status !== AudioPlayerStatus.Paused
         ) {
-          await playNext(message.guild.id);
+          await interaction.editReply(`✅ Đã thêm vào hàng đợi và bắt đầu phát: **${title}**`);
+          await playNext(interaction.guildId);
         } else {
-          message.reply(`✅ Đã thêm vào hàng đợi: **${title}**`);
+          await interaction.editReply(`✅ Đã thêm vào hàng đợi: **${title}**`);
         }
       } catch (err) {
         console.error(err);
-        message.reply('❌ Lỗi khi thêm bài hát.');
+        await interaction.editReply('❌ Lỗi khi thêm bài hát.');
       }
     }
   },

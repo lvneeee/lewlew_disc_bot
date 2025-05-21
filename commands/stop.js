@@ -1,25 +1,29 @@
+const { SlashCommandBuilder } = require('discord.js');
 const { getPlayer, getConnection, clearConnection, clearDisconnectTimeout, clearPlayer } = require('../utils/audioPlayer');
 const { clearQueue } = require('../utils/audioQueue');
 
 module.exports = {
-  name: 'stop',
-  async execute(message) {
-    const player = getPlayer(message.guild.id);
-    const connection = getConnection(message.guild.id);
+  data: new SlashCommandBuilder()
+    .setName('stop')
+    .setDescription('Dừng phát nhạc và xóa hàng đợi'),
 
-    clearQueue(message.guild.id);
+  async execute(interaction) {
+    const player = getPlayer(interaction.guildId);
+    const connection = getConnection(interaction.guildId);
+
+    clearQueue(interaction.guildId);
     
     if (player) {
       player.stop();
-      clearPlayer(message.guild.id);  // Xóa player cũ
+      clearPlayer(interaction.guildId);
     }
 
     if (connection) {
       connection.destroy();
-      clearConnection(message.guild.id);
-      clearDisconnectTimeout(message.guild.id);
+      clearConnection(interaction.guildId);
+      clearDisconnectTimeout(interaction.guildId);
     }
 
-    message.reply('⏹️ Đã dừng phát nhạc và xóa hàng đợi.');
+    interaction.reply('⏹️ Đã dừng phát nhạc và xóa hàng đợi.');
   },
 };

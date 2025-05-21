@@ -1,17 +1,19 @@
+const { SlashCommandBuilder } = require('discord.js');
 const { getPlayer } = require('../utils/audioPlayer');
-const { getQueue } = require('../utils/audioQueue');
 
 module.exports = {
-  name: 'skip',
-  async execute(message) {
-    const player = getPlayer(message.guild.id);
-    const queue = getQueue(message.guild.id);
-    if (!queue || queue.length === 0) {
-      return message.reply('❌ Không có bài nào trong hàng đợi.');
+  data: new SlashCommandBuilder()
+    .setName('skip')
+    .setDescription('Bỏ qua bài hát hiện tại'),
+
+  async execute(interaction) {
+    const player = getPlayer(interaction.guildId);
+
+    if (!player) {
+      return interaction.reply('❗ Không có nhạc nào đang phát để bỏ qua.');
     }
 
-    player.stop(); // dừng bài hiện tại, sẽ kích hoạt event 'Idle' và phát bài kế tiếp
-
-    message.reply('⏭️ Đã bỏ qua bài hiện tại.');
+    player.stop(); // Việc dừng sẽ trigger event idle -> tự động phát bài tiếp
+    interaction.reply('⏭️ Đã bỏ qua bài hát hiện tại.');
   },
 };
