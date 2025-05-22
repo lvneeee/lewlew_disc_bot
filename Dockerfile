@@ -1,22 +1,36 @@
-FROM node:20-slim
+FROM node:18-bullseye
 
 WORKDIR /app
 
-# Install python and other dependencies
+# Install system dependencies
 RUN apt-get update && \
-    apt-get install -y python3 curl ffmpeg && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y \
+    python3 \
+    curl \
+    ffmpeg \
+    build-essential \
+    python3-pip \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install yt-dlp globally
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
     chmod +x /usr/local/bin/yt-dlp && \
     ln -s /usr/local/bin/yt-dlp /usr/bin/yt-dlp
 
+# Set npm config
+ENV NPM_CONFIG_LOGLEVEL=error
+ENV NPM_CONFIG_FUND=false
+ENV NPM_CONFIG_AUDIT=false
+
 # Copy package files
 COPY package*.json ./
 
+# Create .npmrc
+RUN echo "legacy-peer-deps=true\naudit=false\nfund=false" > .npmrc
+
 # Install node dependencies
-RUN npm install --legacy-peer-deps
+RUN npm ci || npm install --no-optional
 
 # Copy the rest of the application
 COPY . .
