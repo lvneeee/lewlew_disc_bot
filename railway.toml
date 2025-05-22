@@ -1,2 +1,11 @@
 [build]
-buildpacks = ["https://github.com/Railway/heroku-buildpack-yt-dlp.git"]
+builder = "nixpacks"
+buildCommand = "npm install"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/"
+restartPolicyType = "on_failure"
+
+[[buildpacks]]
+url = "https://github.com/Railway/heroku-buildpack-yt-dlp.git"
