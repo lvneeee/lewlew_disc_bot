@@ -1,0 +1,2 @@
+[build]
+buildpacks = ["https://github.com/Railway/heroku-buildpack-yt-dlp.git"]
