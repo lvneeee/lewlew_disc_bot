@@ -1,4 +1,4 @@
-FROM node:18
+FROM node:20-slim
 
 WORKDIR /app
 
@@ -9,7 +9,8 @@ RUN apt-get update && \
 
 # Install yt-dlp globally
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
-    chmod +x /usr/local/bin/yt-dlp
+    chmod +x /usr/local/bin/yt-dlp && \
+    ln -s /usr/local/bin/yt-dlp /usr/bin/yt-dlp
 
 # Copy package files
 COPY package*.json ./

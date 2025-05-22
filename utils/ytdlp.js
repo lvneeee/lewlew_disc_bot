@@ -2,10 +2,13 @@ const { spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
 
-// Detect platform and set appropriate yt-dlp executable name
+// Detect platform and environment
 const isWindows = os.platform() === 'win32';
-const ytdlpExecutable = isWindows ? 'yt-dlp.exe' : 'yt-dlp';
-const ytdlpPath = process.env.YTDLP_PATH || path.join(__dirname, '..', ytdlpExecutable);
+const isDocker = process.env.RAILWAY_STATIC_URL !== undefined;
+
+// Set appropriate yt-dlp executable path
+const ytdlpPath = isDocker ? 'yt-dlp' : 
+    isWindows ? path.join(__dirname, '..', 'yt-dlp.exe') : 'yt-dlp';
 
 async function getAudioStream(url) {
   return new Promise((resolve, reject) => {
@@ -13,7 +16,9 @@ async function getAudioStream(url) {
       '-f', 'bestaudio',
       '-o', '-',
       url,
-    ], { stdio: ['ignore', 'pipe', 'ignore'] });
+    ], {      stdio: ['ignore', 'pipe', 'ignore'],
+      shell: false
+    });
 
     process.on('error', (err) => {
       reject(new Error(`Failed to spawn yt-dlp: ${err.message}`));
