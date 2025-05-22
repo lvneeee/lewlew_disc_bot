@@ -1,9 +1,2 @@
 [build]
-builder = "nixpacks"
-
-[deploy]
-startCommand = "npm start"
-restartPolicyType = "on_failure"
-
-[[build.buildpacks]]
-url = "https://github.com/Railway/heroku-buildpack-yt-dlp.git"
+dockerfile = "Dockerfile"
