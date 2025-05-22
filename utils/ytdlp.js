@@ -1,6 +1,11 @@
 const { spawn } = require('child_process');
 const path = require('path');
-const ytdlpPath = process.env.YTDLP_PATH || path.join(__dirname, '../yt-dlp.exe');
+const os = require('os');
+
+// Detect platform and set appropriate yt-dlp executable name
+const isWindows = os.platform() === 'win32';
+const ytdlpExecutable = isWindows ? 'yt-dlp.exe' : 'yt-dlp';
+const ytdlpPath = process.env.YTDLP_PATH || path.join(__dirname, '..', ytdlpExecutable);
 
 async function getAudioStream(url) {
   return new Promise((resolve, reject) => {
@@ -9,6 +14,10 @@ async function getAudioStream(url) {
       '-o', '-',
       url,
     ], { stdio: ['ignore', 'pipe', 'ignore'] });
+
+    process.on('error', (err) => {
+      reject(new Error(`Failed to spawn yt-dlp: ${err.message}`));
+    });
 
     resolve(process.stdout);
   });
