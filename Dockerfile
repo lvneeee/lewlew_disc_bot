@@ -13,12 +13,15 @@ RUN apt-get update && \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp using pip
-RUN python3 -m pip install --no-cache-dir -U yt-dlp
-
-# Create yt-dlp symlinks
-RUN ln -s $(which yt-dlp) /usr/local/bin/yt-dlp && \
-    ln -s $(which yt-dlp) /usr/bin/yt-dlp
+# Install and setup yt-dlp
+RUN python3 -m pip install --no-cache-dir -U yt-dlp && \
+    YT_DLP_PATH=$(which yt-dlp) && \
+    mkdir -p /usr/local/bin && \
+    cp "$YT_DLP_PATH" /usr/local/bin/yt-dlp && \
+    chmod +x /usr/local/bin/yt-dlp && \
+    mkdir -p /usr/bin && \
+    cp /usr/local/bin/yt-dlp /usr/bin/yt-dlp && \
+    chmod +x /usr/bin/yt-dlp
 
 # Set npm config
 ENV NPM_CONFIG_LOGLEVEL=error
