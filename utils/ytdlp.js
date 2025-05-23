@@ -12,9 +12,6 @@ const ytdlpPath = isDocker ? '/usr/local/bin/yt-dlp' :
 
 // Helper function to run yt-dlp with error handling
 function runYtDlp(args, options = {}) {
-  console.log('Running yt-dlp with args:', args);
-  console.log('Using path:', ytdlpPath);
-
   return new Promise((resolve, reject) => {
     const process = spawn(ytdlpPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -56,25 +53,18 @@ async function getAudioStream(url) {
     const process = spawn(ytdlpPath, [
       '-f', 'bestaudio',
       '-o', '-',
-      '--verbose',
       url,
     ], {
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['ignore', 'pipe', 'ignore'], // ẩn stderr
       shell: false
     });
 
-    process.stderr.on('data', (data) => {
-      console.error('yt-dlp audio stream stderr:', data.toString());
-    });
-
     process.on('error', (err) => {
-      console.error('yt-dlp audio stream error:', err);
       throw err;
     });
 
     return process.stdout;
   } catch (error) {
-    console.error('Error in getAudioStream:', error);
     throw error;
   }
 }
