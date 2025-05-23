@@ -6,49 +6,93 @@ const os = require('os');
 const isWindows = os.platform() === 'win32';
 const isDocker = process.env.RAILWAY_STATIC_URL !== undefined;
 
-// Set appropriate yt-dlp executable path
-const ytdlpPath = isDocker ? 'yt-dlp' : 
-    isWindows ? path.join(__dirname, '..', 'yt-dlp.exe') : 'yt-dlp';
+// Set appropriate yt-dlp executable path and validate it exists
+const ytdlpPath = isDocker ? '/usr/local/bin/yt-dlp' : 
+    isWindows ? path.join(__dirname, '..', 'yt-dlp.exe') : '/usr/bin/yt-dlp';
 
-async function getAudioStream(url) {
+// Helper function to run yt-dlp with error handling
+function runYtDlp(args, options = {}) {
+  console.log('Running yt-dlp with args:', args);
+  console.log('Using path:', ytdlpPath);
+
   return new Promise((resolve, reject) => {
-    const process = spawn(ytdlpPath, [
-      '-f', 'bestaudio',
-      '-o', '-',
-      url,
-    ], {      stdio: ['ignore', 'pipe', 'ignore'],
-      shell: false
+    const process = spawn(ytdlpPath, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+      ...options
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    process.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    process.stderr.on('data', (data) => {
+      stderr += data.toString();
+      console.error('yt-dlp stderr:', data.toString());
     });
 
     process.on('error', (err) => {
+      console.error('yt-dlp spawn error:', err);
       reject(new Error(`Failed to spawn yt-dlp: ${err.message}`));
     });
 
-    resolve(process.stdout);
+    process.on('close', (code) => {
+      console.log('yt-dlp process exited with code:', code);
+      if (code !== 0) {
+        console.error('yt-dlp failed with stderr:', stderr);
+        reject(new Error(`yt-dlp exited with code ${code}: ${stderr}`));
+        return;
+      }
+      resolve(stdout);
+    });
   });
 }
 
-async function getVideoInfo(url) {
-  return new Promise((resolve, reject) => {
+async function getAudioStream(url) {
+  try {
     const process = spawn(ytdlpPath, [
+      '-f', 'bestaudio',
+      '-o', '-',
+      '--verbose',
+      url,
+    ], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false
+    });
+
+    process.stderr.on('data', (data) => {
+      console.error('yt-dlp audio stream stderr:', data.toString());
+    });
+
+    process.on('error', (err) => {
+      console.error('yt-dlp audio stream error:', err);
+      throw err;
+    });
+
+    return process.stdout;
+  } catch (error) {
+    console.error('Error in getAudioStream:', error);
+    throw error;
+  }
+}
+
+async function getVideoInfo(url) {
+  try {
+    const output = await runYtDlp([
       '--no-playlist',
       '--print', '%(title)s',
-      url,
+      '--verbose',
+      url
     ]);
-
-    let title = '';
-    process.stdout.on('data', (data) => {
-      title += data.toString();
-    });
-
-    process.on('close', (code) => {
-      if (code === 0) {
-        resolve(title.trim());
-      } else {
-        reject(new Error(`yt-dlp exited with code ${code}`));
-      }
-    });
-  });
+    
+    return output.trim();
+  } catch (error) {
+    console.error('Error in getVideoInfo:', error);
+    throw error;
+  }
 }
 
 function getPlaylistVideos(playlistUrl) {
