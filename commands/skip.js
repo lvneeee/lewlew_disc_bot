@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { getPlayer } = require('../utils/audioPlayer');
+const { getGuildManager } = require('../utils/audioQueue');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -7,13 +7,18 @@ module.exports = {
     .setDescription('Bỏ qua bài hát hiện tại'),
 
   async execute(interaction) {
-    const player = getPlayer(interaction.guildId);
-
-    if (!player) {
-      return interaction.reply('❗ Không có nhạc nào đang phát để bỏ qua.');
+    const guildManager = getGuildManager(interaction.guildId);
+    
+    if (!interaction.member.voice.channel) {
+      return interaction.reply('Bạn cần vào voice channel trước!');
     }
 
-    player.stop(); // Việc dừng sẽ trigger event idle -> tự động phát bài tiếp
-    interaction.reply('⏭️ Đã bỏ qua bài hát hiện tại.');
+    const currentTrack = guildManager.getCurrentTrack();
+    if (!currentTrack) {
+      return interaction.reply('Không có bài hát nào đang phát!');
+    }
+
+    guildManager.getPlayer().stop();
+    await interaction.reply(`⏭️ Đã bỏ qua: **${currentTrack.title}**`);
   },
 };
