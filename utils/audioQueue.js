@@ -1,100 +1,102 @@
-const queues = new Map();       // Map<string, Track[]>
-const currentTracks = new Map(); // Map<string, Track>
+const { createAudioPlayer, createAudioResource, joinVoiceChannel } = require('@discordjs/voice');
 
-/**
- * Thêm bài vào hàng đợi của guild
- * @param {string} guildId 
- * @param {object} track - { url, title }
- */
-function enqueue(guildId, track) {
-  if (!queues.has(guildId)) queues.set(guildId, []);
-  queues.get(guildId).push(track);
-}
+class GuildAudioManager {
+  constructor(guildId) {
+    this.guildId = guildId;
+    this.queue = [];
+    this.currentTrack = null;
+    this.player = createAudioPlayer();
+    this.connection = null;
+    this.volume = 1;
+  }
 
-/**
- * Xoá và trả về bài đầu tiên trong queue
- * @param {string} guildId 
- * @returns {object|null}
- */
-function dequeue(guildId) {
-  if (!queues.has(guildId)) return null;
-  return queues.get(guildId).shift() || null;
-}
+  enqueue(track) {
+    this.queue.push(track);
+  }
 
-/**
- * Xoá bài đầu tiên khỏi hàng đợi (không trả về)
- * @param {string} guildId
- */
-function removeFirst(guildId) {
-  if (queues.has(guildId)) {
-    const queue = queues.get(guildId);
-    if (queue.length > 0) {
-      queue.shift();
+  dequeue() {
+    return this.queue.shift() || null;
+  }
+
+  clear() {
+    this.queue = [];
+  }
+
+  removeAt(index) {
+    if (index >= 0 && index < this.queue.length) {
+      return this.queue.splice(index, 1)[0];
+    }
+    return null;
+  }
+
+  getQueue() {
+    return [...this.queue];
+  }
+
+  setCurrentTrack(track) {
+    this.currentTrack = track;
+  }
+
+  getCurrentTrack() {
+    return this.currentTrack;
+  }
+
+  setConnection(connection) {
+    this.connection = connection;
+    connection.subscribe(this.player);
+  }
+
+  getConnection() {
+    return this.connection;
+  }
+
+  clearConnection() {
+    if (this.connection) {
+      this.connection.destroy();
+      this.connection = null;
     }
   }
-}
 
-/**
- * Xoá bài bất kỳ trong hàng đợi theo vị trí
- * @param {string} guildId 
- * @param {number} index - vị trí bài trong queue (0 = bài đầu)
- * @returns {boolean} - true nếu xoá thành công
- */
-function removeFromQueue(guildId, index) {
-  if (!queues.has(guildId)) return false;
-  const q = queues.get(guildId);
-  if (index < 0 || index >= q.length) return false;
-  q.splice(index, 1);
-  return true;
-}
+  getPlayer() {
+    return this.player;
+  }
 
-/**
- * Lấy toàn bộ hàng đợi
- * @param {string} guildId 
- * @returns {Array<object>}
- */
-function getQueue(guildId) {
-  return queues.get(guildId) || [];
-}
+  setVolume(value) {
+    this.volume = value;
+    if (this.player.state.resource) {
+      this.player.state.resource.volume.setVolume(value);
+    }
+  }
 
-/**
- * Đặt bài đang phát
- * @param {string} guildId 
- * @param {object|null} track 
- */
-function setCurrentTrack(guildId, track) {
-  if (track) {
-    currentTracks.set(guildId, track);
-  } else {
-    currentTracks.delete(guildId);
+  getVolume() {
+    return this.volume;
   }
 }
 
-/**
- * Lấy bài đang phát
- * @param {string} guildId 
- * @returns {object|null}
- */
-function getCurrentTrack(guildId) {
-  return currentTracks.get(guildId) || null;
-}
+// Map to store guild-specific audio managers
+const guildManagers = new Map();
 
-/**
- * Xoá hàng đợi và bài đang phát của guild
- * @param {string} guildId 
- */
-function clearQueue(guildId) {
-  queues.delete(guildId);
-  currentTracks.delete(guildId);
+function getGuildManager(guildId) {
+  if (!guildManagers.has(guildId)) {
+    guildManagers.set(guildId, new GuildAudioManager(guildId));
+  }
+  return guildManagers.get(guildId);
 }
 
 module.exports = {
-  enqueue,
-  dequeue,
-  removeFirst,
-  removeFromQueue,
-  getQueue,
-  setCurrentTrack,
-  getCurrentTrack,
-  clearQueue,
+  getGuildManager,
+  // Export các phương thức helper
+  enqueue: (guildId, track) => getGuildManager(guildId).enqueue(track),
+  dequeue: (guildId) => getGuildManager(guildId).dequeue(),
+  getQueue: (guildId) => getGuildManager(guildId).getQueue(),
+  clear: (guildId) => getGuildManager(guildId).clear(),
+  removeAt: (guildId, index) => getGuildManager(guildId).removeAt(index),
+  getCurrentTrack: (guildId) => getGuildManager(guildId).getCurrentTrack(),
+  setCurrentTrack: (guildId, track) => getGuildManager(guildId).setCurrentTrack(track),
+  getConnection: (guildId) => getGuildManager(guildId).getConnection(),
+  setConnection: (guildId, connection) => getGuildManager(guildId).setConnection(connection),
+  clearConnection: (guildId) => getGuildManager(guildId).clearConnection(),
+  getPlayer: (guildId) => getGuildManager(guildId).getPlayer(),
+  setVolume: (guildId, value) => getGuildManager(guildId).setVolume(value),
+  getVolume: (guildId) => getGuildManager(guildId).getVolume()
 };
