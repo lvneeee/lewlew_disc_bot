@@ -1,38 +1,36 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getGuildManager } = require('../utils/audioQueue');
+const { getQueue, getCurrentTrack } = require('../utils/audioQueue');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('queue')
-    .setDescription('Hiển thị danh sách phát'),
+    .setDescription('Hiển thị danh sách các bài hát trong hàng đợi'),
 
   async execute(interaction) {
-    const guildManager = getGuildManager(interaction.guildId);
-    const queue = guildManager.getQueue();
-    const currentTrack = guildManager.getCurrentTrack();
+    const queue = getQueue(interaction.guildId);
+    const currentTrack = getCurrentTrack(interaction.guildId);
 
     if (!currentTrack && queue.length === 0) {
-      return interaction.reply('Không có bài hát nào trong hàng đợi!');
+      return interaction.reply('❌ Không có bài hát nào trong hàng đợi.');
     }
 
     const embed = new EmbedBuilder()
-      .setTitle('🎵 Danh sách phát')
+      .setTitle('🎵 Hàng đợi phát nhạc')
       .setColor('#0099ff');
 
     let description = '';
-
+    
     if (currentTrack) {
-      description += `**Đang phát:**\n${currentTrack.title} | Yêu cầu bởi: ${currentTrack.requestedBy}\n\n`;
+      description += `**Đang phát:** ${currentTrack.title}\n\n`;
     }
 
     if (queue.length > 0) {
-      description += '**Tiếp theo:**\n';
-      queue.forEach((track, index) => {
-        description += `${index + 1}. ${track.title} | Yêu cầu bởi: ${track.requestedBy}\n`;
-      });
+      description += queue
+        .map((track, index) => `${index + 1}. ${track.title}`)
+        .join('\n');
     }
 
     embed.setDescription(description);
-    await interaction.reply({ embeds: [embed] });
+    interaction.reply({ embeds: [embed] });
   },
 };

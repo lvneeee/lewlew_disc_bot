@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { getGuildManager } = require('../utils/audioQueue');
+const { removeFromQueue, getQueue } = require('../utils/audioQueue');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -8,30 +8,30 @@ module.exports = {
     .addIntegerOption(option =>
       option
         .setName('position')
-        .setDescription('Vị trí bài hát trong hàng đợi')
+        .setDescription('Vị trí bài hát trong hàng đợi (1, 2, 3,...)')
         .setRequired(true)
         .setMinValue(1)
     ),
 
   async execute(interaction) {
-    const guildManager = getGuildManager(interaction.guildId);
-    
-    if (!interaction.member.voice.channel) {
-      return interaction.reply('Bạn cần vào voice channel trước!');
-    }
+    const position = interaction.options.getInteger('position') - 1; // Chuyển về index 0-based
+    const queue = getQueue(interaction.guildId);
 
-    const position = interaction.options.getInteger('position') - 1;
-    const queue = guildManager.getQueue();
+    if (queue.length === 0) {
+      return interaction.reply('❗ Hàng đợi đang trống.');
+    }
 
     if (position >= queue.length) {
-      return interaction.reply('Không tìm thấy bài hát ở vị trí này!');
+      return interaction.reply(`❗ Chỉ có ${queue.length} bài trong hàng đợi.`);
     }
 
-    const removedTrack = guildManager.removeAt(position);
-    if (removedTrack) {
-      await interaction.reply(`🗑️ Đã xóa: **${removedTrack.title}**`);
+    const removedTrack = queue[position];
+    const success = removeFromQueue(interaction.guildId, position);
+
+    if (success) {
+      interaction.reply(`✅ Đã xóa bài **${removedTrack.title}** khỏi hàng đợi.`);
     } else {
-      await interaction.reply('Không thể xóa bài hát!');
+      interaction.reply('❌ Không thể xóa bài hát.');
     }
   },
 };

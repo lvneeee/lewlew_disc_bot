@@ -1,28 +1,26 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getGuildManager } = require('../utils/audioQueue');
+const { getCurrentTrack } = require('../utils/audioQueue');
+const { getPlayer, AudioPlayerStatus } = require('../utils/audioPlayer');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('nowplaying')
-    .setDescription('Hiển thị bài hát đang phát'),
+    .setDescription('Hiển thị thông tin bài hát đang phát'),
 
   async execute(interaction) {
-    const guildManager = getGuildManager(interaction.guildId);
-    const currentTrack = guildManager.getCurrentTrack();
+    const player = getPlayer(interaction.guildId);
+    const currentTrack = getCurrentTrack(interaction.guildId);
 
-    if (!currentTrack) {
-      return interaction.reply('Không có bài hát nào đang phát!');
+    if (!player || !currentTrack || player.state.status === AudioPlayerStatus.Idle) {
+      return interaction.reply('❗ Không có bài hát nào đang phát.');
     }
 
     const embed = new EmbedBuilder()
       .setTitle('🎵 Đang phát')
-      .setDescription(`**${currentTrack.title}**\nYêu cầu bởi: ${currentTrack.requestedBy}`)
-      .setColor('#0099ff');
+      .setDescription(`**${currentTrack.title}**`)
+      .setColor('#0099ff')
+      .setURL(currentTrack.url);
 
-    if (currentTrack.thumbnail) {
-      embed.setThumbnail(currentTrack.thumbnail);
-    }
-
-    await interaction.reply({ embeds: [embed] });
+    interaction.reply({ embeds: [embed] });
   },
 };

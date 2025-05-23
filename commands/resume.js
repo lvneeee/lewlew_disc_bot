@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { getGuildManager } = require('../utils/audioQueue');
+const { AudioPlayerStatus } = require('@discordjs/voice');
+const { getPlayer } = require('../utils/audioPlayer');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -7,18 +8,17 @@ module.exports = {
     .setDescription('Tiếp tục phát nhạc'),
 
   async execute(interaction) {
-    const guildManager = getGuildManager(interaction.guildId);
-    
-    if (!interaction.member.voice.channel) {
-      return interaction.reply('Bạn cần vào voice channel trước!');
+    const player = getPlayer(interaction.guildId);
+
+    if (!player || player.state.status !== AudioPlayerStatus.Paused) {
+      return interaction.reply('❗ Không có nhạc nào đang tạm dừng để tiếp tục.');
     }
 
-    const currentTrack = guildManager.getCurrentTrack();
-    if (!currentTrack) {
-      return interaction.reply('Không có bài hát nào đang phát!');
+    const success = player.unpause();
+    if (success) {
+      interaction.reply('▶️ Đã tiếp tục phát nhạc.');
+    } else {
+      interaction.reply('⚠️ Không thể tiếp tục phát.');
     }
-
-    guildManager.getPlayer().unpause();
-    await interaction.reply('▶️ Đã tiếp tục phát nhạc');
   },
 };

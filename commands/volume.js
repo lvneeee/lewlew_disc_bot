@@ -1,30 +1,29 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { getGuildManager } = require('../utils/audioQueue');
+const { getVolumeTransformer, setVolume } = require('../utils/volumeControl');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('volume')
     .setDescription('Điều chỉnh âm lượng')
-    .addIntegerOption(option =>
+    .addNumberOption(option =>
       option
         .setName('level')
-        .setDescription('Mức âm lượng (0-200)')
+        .setDescription('Mức âm lượng (0,0 đến 2,0)')
         .setRequired(true)
         .setMinValue(0)
-        .setMaxValue(200)
+        .setMaxValue(2)
     ),
 
   async execute(interaction) {
-    const guildManager = getGuildManager(interaction.guildId);
-    
-    if (!interaction.member.voice.channel) {
-      return interaction.reply('Bạn cần vào voice channel trước!');
+    const volume = interaction.options.getNumber('level');
+
+    const transformer = getVolumeTransformer(interaction.guildId);
+    if (!transformer) {
+      return interaction.reply('❗ Không thể chỉnh volume vì chưa có nhạc nào đang phát.');
     }
 
-    const volume = interaction.options.getInteger('level');
-    const normalizedVolume = volume / 100;
-
-    guildManager.setVolume(normalizedVolume);
-    await interaction.reply(`🔊 Đã đặt âm lượng: ${volume}%`);
+    setVolume(interaction.guildId, volume);
+    transformer.setVolume(volume);
+    interaction.reply(`🔊 Đã chỉnh âm lượng về **${volume*100}%**`);
   },
 };

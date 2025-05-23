@@ -1,7 +1,39 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { joinVoiceChannel, createAudioResource } = require('@discordjs/voice');
-const { getAudioStream, getVideoInfo, getPlaylistVideos } = require('../utils/ytdlp');
-const { getGuildManager } = require('../utils/audioQueue');
+const {
+  joinVoiceChannel,
+  createAudioResource,
+  StreamType,
+} = require('@discordjs/voice');
+const prism = require('prism-media');
+const { spawn } = require('child_process');
+const ffmpegPath = require('ffmpeg-static');
+
+const {
+  getAudioStream,
+  getVideoInfo,
+  getPlaylistVideos,
+} = require('../utils/ytdlp');
+
+const {
+  enqueue,
+  dequeue,
+  setCurrentTrack,
+  getQueue,
+} = require('../utils/audioQueue');
+
+const {
+  createPlayer,
+  getPlayer,
+  setConnection,
+  getConnection,
+  clearConnection,
+  setDisconnectTimeout,
+  clearDisconnectTimeout,
+  clearPlayer,
+  AudioPlayerStatus,
+} = require('../utils/audioPlayer');
+
+const { setVolumeTransformer } = require('../utils/volumeControl');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -9,128 +41,167 @@ module.exports = {
     .setDescription('Phát nhạc từ YouTube')
     .addStringOption(option =>
       option
-        .setName('query')
-        .setDescription('Link YouTube hoặc tên bài hát')
+        .setName('url')
+        .setDescription('URL của video hoặc playlist YouTube')
         .setRequired(true)
     ),
-
-  async execute(interaction) {
-    const guildId = interaction.guildId;
-    const guildManager = getGuildManager(guildId);
-
-    await interaction.deferReply();
-
-    const query = interaction.options.getString('query');
-    const voiceChannel = interaction.member.voice.channel;
-
-    if (!voiceChannel) {
-      return interaction.editReply('Bạn cần vào voice channel trước!');
+  async execute(interaction, isFromSearch = false, directUrl = null) {
+    // Only defer if this is a direct command, not from search
+    if (!isFromSearch) {
+      await interaction.deferReply();
     }
 
-    try {
-      let title;
-      let url;
+    const url = directUrl || interaction.options.getString('url');
+    const voiceChannel = interaction.member.voice.channel;
+    
+    if (!voiceChannel) {
+      return isFromSearch 
+        ? interaction.followUp('❗ Bạn phải vào voice channel trước.')
+        : interaction.editReply('❗ Bạn phải vào voice channel trước.');
+    }
 
-      if (query.startsWith('http')) {
-        // Xử lý playlist
-        if (query.includes('playlist')) {
-          const videos = await getPlaylistVideos(query);
-          if (!videos || videos.length === 0) {
-            return interaction.editReply('Không tìm thấy video nào trong playlist!');
-          }
-
-          for (const video of videos) {
-            guildManager.enqueue({
-              url: video.url,
-              title: video.title,
-              requestedBy: interaction.user.tag
-            });
-          }
-
-          await interaction.editReply(
-            `Đã thêm ${videos.length} bài hát vào hàng đợi!`
-          );
-
-          if (!guildManager.getCurrentTrack()) {
-            await playNext(interaction, guildManager);
-          }
-          return;
-        }
-
-        // Link trực tiếp
-        title = await getVideoInfo(query);
-        url = query;
-      } else {
-        // Search query
-        const videos = await getPlaylistVideos('ytsearch1:' + query);
-        if (!videos || videos.length === 0) {
-          return interaction.editReply('Không tìm thấy video!');
-        }
-        title = videos[0].title;
-        url = videos[0].url;
-      }
-
-      // Kiểm tra connection hiện tại
-      let connection = guildManager.getConnection();
-      if (!connection) {
-        connection = joinVoiceChannel({
-          channelId: voiceChannel.id,
-          guildId: interaction.guild.id,
-          adapterCreator: interaction.guild.voiceAdapterCreator,
-        });
-        guildManager.setConnection(connection);
-      }
-
-      // Thêm vào queue
-      guildManager.enqueue({
-        url,
-        title,
-        requestedBy: interaction.user.tag
+    let connection = getConnection(interaction.guildId);
+    if (!connection) {
+      connection = joinVoiceChannel({
+        channelId: voiceChannel.id,
+        guildId: interaction.guildId,
+        adapterCreator: interaction.guild.voiceAdapterCreator,
       });
+      setConnection(interaction.guildId, connection);
+    }
 
-      // Nếu không có bài hát nào đang phát, phát bài hát mới
-      if (!guildManager.getCurrentTrack()) {
-        await playNext(interaction, guildManager);
-      } else {
-        await interaction.editReply(
-          `Đã thêm vào hàng đợi: **${title}**`
+    // Hàm phát bài tiếp theo, truyền guildId để tái sử dụng
+    const playNext = async (guildId) => {
+      clearDisconnectTimeout(guildId);
+
+      const next = dequeue(guildId);
+      if (!next) {
+        // Queue trống, đợi 2 phút rồi disconnect
+        setDisconnectTimeout(
+          guildId,
+          () => {
+            const conn = getConnection(guildId);
+            if (conn) {
+              conn.destroy();
+              clearConnection(guildId);
+              clearPlayer(guildId);
+            }
+          },
+          2 * 60 * 1000
         );
+        setCurrentTrack(guildId, null);
+        return;
       }
 
-    } catch (error) {
-      console.error('Error in play command:', error);
-      await interaction.editReply('Có lỗi xảy ra khi phát nhạc!');
+      try {
+        const stream = await getAudioStream(next.url);
+
+        const ffmpeg = spawn(ffmpegPath, [
+          '-i', 'pipe:0',
+          '-f', 's16le',
+          '-ar', '48000',
+          '-ac', '2',
+          'pipe:1',
+        ], { stdio: ['pipe', 'pipe', 'ignore'] });
+
+        stream.pipe(ffmpeg.stdin);
+
+        const volumeTransformer = new prism.VolumeTransformer({ type: 's16le', volume: 1 });
+        ffmpeg.stdout.pipe(volumeTransformer);
+        
+        // Lưu volumeTransformer để có thể điều chỉnh âm lượng sau này
+        setVolumeTransformer(guildId, volumeTransformer);
+
+        const resource = createAudioResource(volumeTransformer, {
+          inputType: StreamType.Raw,
+        });
+
+        setCurrentTrack(guildId, next);
+        const player = getPlayer(guildId);
+        player.play(resource);
+
+        // Chỉ gửi thông báo nếu không phải bài đầu tiên
+        if (player.state.status === AudioPlayerStatus.Playing) {
+          interaction.channel.send(`🎶 Đang phát: **${next.title}**`);
+        }
+      } catch (err) {
+        console.error('Lỗi phát bài:', err);
+        interaction.channel.send(`❌ Không thể phát bài: ${next.title || next.url}`);
+        playNext(guildId); // tiếp tục bài tiếp theo nếu lỗi
+      }
+    };
+
+    let player = getPlayer(interaction.guildId);
+    if (!player) {
+      player = createPlayer(interaction.guildId, playNext);
+      connection.subscribe(player);
+    }
+
+    // Nếu player đang paused thì resume (unpause)
+    if (player.state.status === AudioPlayerStatus.Paused) {
+      player.unpause();
+      return interaction.editReply('▶️ Tiếp tục phát nhạc.');
+    }
+
+    const isPlaylist = url.includes('list=');
+
+    if (isPlaylist) {
+      try {
+        const videos = await getPlaylistVideos(url);
+        if (videos.length === 0) {
+          return interaction.editReply('❌ Không tìm thấy video trong playlist.');
+        }
+
+        videos.forEach(video => enqueue(interaction.guildId, video));
+        await interaction.editReply(`✅ Đã thêm ${videos.length} bài từ playlist vào hàng đợi.`);
+
+        if (
+          player.state.status !== AudioPlayerStatus.Playing &&
+          player.state.status !== AudioPlayerStatus.Paused
+        ) {
+          await playNext(interaction.guildId);
+        }
+      } catch (err) {
+        console.error(err);
+        await interaction.editReply('❌ Lỗi khi lấy playlist.');
+      }
+    } else {
+      try {
+        let title = url;
+        try {
+          title = await getVideoInfo(url);
+        } catch (e) {
+          console.warn('Không lấy được tiêu đề video:', e.message);
+        }
+        enqueue(interaction.guildId, { url, title });
+
+        if (
+          player.state.status !== AudioPlayerStatus.Playing &&
+          player.state.status !== AudioPlayerStatus.Paused
+        ) {          const message = `✅ Đã thêm vào hàng đợi và bắt đầu phát: **${title}**`;
+          if (isFromSearch) {
+            await interaction.followUp(message);
+          } else {
+            await interaction.editReply(message);
+          }
+          await playNext(interaction.guildId);
+        } else {
+          const message = `✅ Đã thêm vào hàng đợi: **${title}**`;
+          if (isFromSearch) {
+            await interaction.followUp(message);
+          } else {
+            await interaction.editReply(message);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        const message = '❌ Lỗi khi thêm bài hát.';
+        if (isFromSearch) {
+          await interaction.followUp(message);
+        } else {
+          await interaction.editReply(message);
+        }
+      }
     }
   },
 };
-
-async function playNext(interaction, guildManager) {
-  const track = guildManager.dequeue();
-  if (!track) {
-    guildManager.clearConnection();
-    return interaction.editReply('Hết bài hát trong hàng đợi!');
-  }
-
-  try {
-    guildManager.setCurrentTrack(track);
-    const stream = await getAudioStream(track.url);
-    const resource = createAudioResource(stream, {
-      inputType: 'opus',
-      inlineVolume: true
-    });
-
-    const player = guildManager.getPlayer();
-    resource.volume.setVolume(guildManager.getVolume());
-    player.play(resource);
-
-    await interaction.editReply(
-      `🎵 Đang phát: **${track.title}**`
-    );
-
-  } catch (error) {
-    console.error('Error playing next track:', error);
-    await interaction.editReply('Có lỗi xảy ra khi phát nhạc!');
-    // Try to play next song
-    await playNext(interaction, guildManager);
-  }
-}
