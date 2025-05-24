@@ -13,6 +13,7 @@ const {
   getVideoInfo,
   getPlaylistVideos,
 } = require('../utils/ytdlp');
+const { resolveYoutubeFromUrlOrQuery } = require('../utils/musicSource');
 
 const { getGuildManager } = require('../utils/audioQueue');
 const logger = require('../utils/logger');
@@ -62,43 +63,23 @@ module.exports = {
       return interaction.editReply('▶️ Tiếp tục phát nhạc.');
     }
 
-    const isPlaylist = url.includes('list=');
-
-    if (isPlaylist) {
-      try {
-        const videos = await getPlaylistVideos(url);
-        if (videos.length === 0) {
-          return interaction.editReply('❌ Không tìm thấy video trong playlist.');
-        }
-
-        videos.forEach(video => guildManager.enqueue(video));
-        await interaction.editReply(`✅ Đã thêm ${videos.length} bài từ playlist vào hàng đợi.`);
-
-        if (player.state.status !== 'playing' && player.state.status !== 'paused') {
-          await guildManager.playNext(interaction);
-        }
-      } catch (err) {
-        logger.error('Lỗi khi lấy playlist: ' + err);
-        await interaction.editReply('❌ Lỗi khi lấy playlist.');
+    // Xử lý mọi nguồn phát (YouTube link, playlist, query)
+    try {
+      const tracks = await resolveYoutubeFromUrlOrQuery(url);
+      if (!tracks.length) {
+        return interaction.editReply('❌ Không tìm thấy hoặc không phát được nguồn nhạc.');
       }
-    } else {
-      try {
-        let title = url;
-        try {
-          title = await getVideoInfo(url);
-        } catch (e) {
-          logger.warn('Không lấy được tiêu đề video: ' + e.message);
-        }
-        guildManager.enqueue({ url, title });
-        if (player.state.status !== 'playing' && player.state.status !== 'paused') {
-          await guildManager.playNext(interaction);
-        } else {
-          await interaction.editReply(`✅ Đã thêm vào hàng đợi: **${title}**`);
-        }
-      } catch (err) {
-        logger.error('Lỗi khi thêm bài hát: ' + err);
-        await interaction.editReply('❌ Lỗi khi thêm bài hát.');
+      tracks.forEach(track => guildManager.enqueue(track));
+      if (tracks.length > 1) {
+        await interaction.editReply(`✅ Đã thêm ${tracks.length} bài vào hàng đợi.`);
+      } else if (player.state.status !== 'playing' && player.state.status !== 'paused') {
+        await guildManager.playNext(interaction);
+      } else {
+        await interaction.editReply(`✅ Đã thêm vào hàng đợi: **${tracks[0].title}**`);
       }
+    } catch (err) {
+      logger.error('Lỗi khi phát nhạc: ' + err);
+      await interaction.editReply('❌ Lỗi khi phát nhạc.');
     }
   },
   playNext,
