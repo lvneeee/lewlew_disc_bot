@@ -3,6 +3,7 @@ const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const { deploySlashCommands } = require('./utils/deployCommands');
+const logger = require('./utils/logger');
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
@@ -51,8 +52,9 @@ client.once('ready', async () => {
 (async () => {
   try {
     await deploySlashCommands(process.env.DISCORD_TOKEN, process.env.CLIENT_ID);
-  } catch (error) {
-    console.error('Lỗi khi đăng ký commands:', error);
+  } catch (err) {
+    logger.error('Bot startup failed: ' + err.stack);
+    process.exit(1);
   }
 })();
 

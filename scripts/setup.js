@@ -41,7 +41,7 @@ function setupYtDlp() {
       }
       throw new Error('yt-dlp verification failed after installation');
     } catch (error) {
-      logger.error('Error installing yt-dlp: ' + error.message);
+      logger.error('Error installing yt-dlp: ' + error.stack);
       process.exit(1);
     }
   }
@@ -66,9 +66,15 @@ function setupYtDlp() {
       throw new Error('yt-dlp verification failed after installation');
     }
   } catch (error) {
-    logger.error('Error installing yt-dlp: ' + error.message);
+    logger.error('Error installing yt-dlp: ' + error.stack);
     process.exit(1);
   }
 }
 
-setupYtDlp();
+try {
+  setupYtDlp();
+  logger.info('setup.js completed successfully');
+} catch (err) {
+  logger.error('setup.js failed: ' + err.stack);
+  process.exit(1);
+}
