@@ -74,6 +74,7 @@ function setupYtDlp() {
 try {
   setupYtDlp();
   logger.info('setup.js completed successfully');
+  process.exit(0);
 } catch (err) {
   logger.error('setup.js failed: ' + err.stack);
   process.exit(1);

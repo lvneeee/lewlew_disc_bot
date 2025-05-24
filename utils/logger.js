@@ -10,8 +10,7 @@ const logger = createLogger({
   ),
   transports: [
     new transports.Console(),
-    // Có thể thêm file log nếu muốn:
-    // new transports.File({ filename: 'app.log' })
+    new transports.File({ filename: 'app.log', maxsize: 5242880, maxFiles: 5 })
   ],
 });
 
