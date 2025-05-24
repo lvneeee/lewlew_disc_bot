@@ -1,6 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { clearQueue } = require('../utils/audioQueue');
-const { getPlayer } = require('../utils/audioPlayer');
+const { getGuildManager } = require('../utils/audioQueue');
 const logger = require('../utils/logger');
 
 module.exports = {
@@ -9,18 +8,12 @@ module.exports = {
     .setDescription('Xóa toàn bộ hàng đợi phát nhạc'),
 
   async execute(interaction) {
-    const player = getPlayer(interaction.guildId);
-    
-    if (!player) {
-      return interaction.reply('❗ Không có hàng đợi nào để xóa.');
-    }
-
+    const guildManager = getGuildManager(interaction.guildId);
     if (!interaction.member.voice.channel) {
       logger.warn(`[CLEARQUEUE] User ${interaction.user.tag} tried to clear queue without joining a voice channel.`);
       return interaction.reply('Bạn cần vào voice channel trước!');
     }
-
-    clearQueue(interaction.guildId);
+    guildManager.clear();
     logger.info(`[CLEARQUEUE] Queue cleared in guild ${interaction.guildId} by ${interaction.user.tag}`);
     await interaction.reply('🗑️ Đã xóa toàn bộ hàng đợi!');
   },
