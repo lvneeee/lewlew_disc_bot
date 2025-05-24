@@ -1,4 +1,10 @@
 const { createLogger, format, transports } = require('winston');
+const fs = require('fs');
+
+// Đảm bảo thư mục logs tồn tại
+if (!fs.existsSync('logs')) {
+  fs.mkdirSync('logs');
+}
 
 const logger = createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -10,7 +16,7 @@ const logger = createLogger({
   ),
   transports: [
     new transports.Console(),
-    new transports.File({ filename: 'app.log', maxsize: 5242880, maxFiles: 5 })
+    new transports.File({ filename: 'logs/app.log', maxsize: 5242880, maxFiles: 5 })
   ],
 });
 
