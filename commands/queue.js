@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getQueue, getCurrentTrack, getGuildManager } = require('../utils/audioQueue');
+const { getGuildManager } = require('../utils/audioQueue');
 const logger = require('../utils/logger');
 
 module.exports = {
