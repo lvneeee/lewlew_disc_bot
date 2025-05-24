@@ -100,6 +100,7 @@ module.exports = {
       }
     }
   },
+  playNext,
 };
 
 async function playNext(interaction, guildManager) {
