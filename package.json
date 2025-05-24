@@ -5,10 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node scripts/setup.js && node index.js",
+    "start": "node index.js",
+    "setup": "node scripts/setup.js",
     "deploy": "node scripts/deploy.js",
-    "link": "node utils/inviteLink.js",
-    "setup": "node scripts/setup.js"
+    "link": "node utils/inviteLink.js"
   },
   "keywords": [],
   "author": "",

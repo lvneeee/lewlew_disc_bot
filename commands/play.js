@@ -44,6 +44,7 @@ module.exports = {
 
     const guildId = interaction.guildId;
     const guildManager = getGuildManager(guildId);
+    guildManager.setLastInteraction(interaction);
     let connection = guildManager.getConnection();
     if (!connection) {
       connection = joinVoiceChannel({
@@ -74,7 +75,7 @@ module.exports = {
         await interaction.editReply(`✅ Đã thêm ${videos.length} bài từ playlist vào hàng đợi.`);
 
         if (player.state.status !== 'playing' && player.state.status !== 'paused') {
-          await playNext(interaction, guildManager);
+          await guildManager.playNext(interaction);
         }
       } catch (err) {
         logger.error('Lỗi khi lấy playlist: ' + err);
@@ -90,7 +91,7 @@ module.exports = {
         }
         guildManager.enqueue({ url, title });
         if (player.state.status !== 'playing' && player.state.status !== 'paused') {
-          await playNext(interaction, guildManager);
+          await guildManager.playNext(interaction);
         } else {
           await interaction.editReply(`✅ Đã thêm vào hàng đợi: **${title}**`);
         }

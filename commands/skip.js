@@ -18,11 +18,10 @@ module.exports = {
       logger.warn(`[SKIP] No track to skip in guild ${interaction.guildId}`);
       return interaction.reply('Không có bài hát nào đang phát!');
     }
+    guildManager.setLastInteraction(interaction);
     guildManager.getPlayer().stop();
     logger.info(`[SKIP] Track skipped in guild ${interaction.guildId} by ${interaction.user.tag}: ${currentTrack.title}`);
     await interaction.reply(`⏭️ Đã bỏ qua: **${currentTrack.title}**`);
-    // Gọi playNext để phát bài tiếp theo
-    const { playNext } = require('./play');
-    await playNext(interaction, guildManager);
+    // Không gọi playNext ở đây nữa, player sẽ tự động phát tiếp nhờ sự kiện idle
   },
 };

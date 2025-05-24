@@ -1,4 +1,4 @@
-const { createAudioPlayer } = require('@discordjs/voice');
+const { createAudioPlayer, AudioPlayerStatus } = require('@discordjs/voice');
 
 class GuildAudioManager {
   constructor(guildId) {
@@ -8,6 +8,14 @@ class GuildAudioManager {
     this.player = createAudioPlayer();
     this.connection = null;
     this.volume = 1;
+    this.lastInteraction = null;
+
+    // Đăng ký sự kiện idle để tự động phát tiếp bài tiếp theo
+    this.player.on(AudioPlayerStatus.Idle, async () => {
+      try {
+        await this.playNext(this.lastInteraction);
+      } catch (e) {}
+    });
   }
 
   enqueue(track) {
@@ -71,6 +79,44 @@ class GuildAudioManager {
 
   getVolume() {
     return this.volume;
+  }
+
+  setLastInteraction(interaction) {
+    this.lastInteraction = interaction;
+  }
+
+  async playNext(interaction) {
+    const track = this.dequeue();
+    if (!track) {
+      this.clearConnection();
+      if (interaction) {
+        await interaction.editReply('Hết bài hát trong hàng đợi!');
+      }
+      return;
+    }
+    try {
+      this.setCurrentTrack(track);
+      const { getAudioStream } = require('../utils/ytdlp');
+      const { createAudioResource, StreamType } = require('@discordjs/voice');
+      const stream = await getAudioStream(track.url);
+      const resource = createAudioResource(stream, {
+        inputType: StreamType.Arbitrary,
+        inlineVolume: true
+      });
+      resource.volume.setVolume(this.getVolume());
+      const player = this.getPlayer();
+      player.play(resource);
+      if (interaction) {
+        await interaction.editReply(`🎵 Đang phát: **${track.title}**`);
+      }
+    } catch (error) {
+      const logger = require('./logger');
+      logger.error('Error playing next track: ' + error);
+      if (interaction) {
+        await interaction.editReply('Có lỗi xảy ra khi phát nhạc!');
+      }
+      await this.playNext(interaction);
+    }
   }
 }
 

@@ -38,4 +38,10 @@ COPY . .
 # Set environment variable for Node
 ENV NODE_OPTIONS="--no-experimental-fetch"
 
+# Run setup script
+RUN npm run setup
+
+# Build/deploy step (if needed)
+RUN npm run deploy || echo "No deploy script or deploy failed, continuing..."
+
 CMD ["npm", "start"]
