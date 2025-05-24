@@ -21,5 +21,8 @@ module.exports = {
     guildManager.getPlayer().stop();
     logger.info(`[SKIP] Track skipped in guild ${interaction.guildId} by ${interaction.user.tag}: ${currentTrack.title}`);
     await interaction.reply(`⏭️ Đã bỏ qua: **${currentTrack.title}**`);
+    // Gọi playNext để phát bài tiếp theo
+    const { playNext } = require('./play');
+    await playNext(interaction, guildManager);
   },
 };

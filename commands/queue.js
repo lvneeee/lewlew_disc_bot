@@ -24,17 +24,23 @@ module.exports = {
       .setColor('#0099ff');
 
     let description = '';
-    
+    const MAX_QUEUE_DISPLAY = 20;
     if (currentTrack) {
       description += `**Đang phát:** ${currentTrack.title}\n\n`;
     }
-
     if (queue.length > 0) {
-      description += queue
+      const displayQueue = queue.slice(0, MAX_QUEUE_DISPLAY);
+      description += displayQueue
         .map((track, index) => `${index + 1}. ${track.title}`)
         .join('\n');
+      if (queue.length > MAX_QUEUE_DISPLAY) {
+        description += `\n...và ${queue.length - MAX_QUEUE_DISPLAY} bài nữa.`;
+      }
     }
-
+    // Đảm bảo không vượt quá 4096 ký tự
+    if (description.length > 4096) {
+      description = description.slice(0, 4093) + '...';
+    }
     embed.setDescription(description);
     interaction.reply({ embeds: [embed] });
   },
