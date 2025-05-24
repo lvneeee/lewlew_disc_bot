@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const { searchVideos } = require('../utils/ytdlp');
 const { execute: playExecute } = require('./play');
+const logger = require('../utils/logger');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -21,6 +22,7 @@ module.exports = {
       const results = await searchVideos(query, 1); // Chỉ lấy 1 kết quả
 
       if (results.length === 0) {
+        logger.info(`[SEARCH] User ${interaction.user.tag} searched '${query}' in guild ${interaction.guildId} (no result)`);
         return interaction.editReply('❌ Không tìm thấy video nào.');
       }
 
@@ -28,14 +30,17 @@ module.exports = {
       const voiceChannel = interaction.member.voice.channel;
       
       if (!voiceChannel) {
+        logger.warn(`[SEARCH] User ${interaction.user.tag} searched '${query}' but not in voice channel (guild ${interaction.guildId})`);
         return interaction.editReply('❗ Bạn phải vào voice channel trước.');
-      }      await interaction.editReply(`🔎 Đã tìm thấy: **${video.title}**`);
+      }
+      logger.info(`[SEARCH] User ${interaction.user.tag} searched '${query}' and found '${video.title}' in guild ${interaction.guildId}`);
+      await interaction.editReply(`🔎 Đã tìm thấy: **${video.title}**`);
 
       // Pass the original interaction, isFromSearch flag, and video URL
       await playExecute(interaction, true, video.url);
 
     } catch (error) {
-      console.error('Lỗi khi tìm kiếm:', error);
+      logger.error(`[SEARCH] Error searching in guild ${interaction.guildId}: ${error}`);
       return interaction.editReply('❌ Có lỗi xảy ra khi tìm kiếm.');
     }
   }

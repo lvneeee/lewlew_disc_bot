@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getQueue, getCurrentTrack } = require('../utils/audioQueue');
+const logger = require('../utils/logger');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -7,12 +8,16 @@ module.exports = {
     .setDescription('Hiển thị danh sách các bài hát trong hàng đợi'),
 
   async execute(interaction) {
-    const queue = getQueue(interaction.guildId);
-    const currentTrack = getCurrentTrack(interaction.guildId);
+    const guildManager = getGuildManager(interaction.guildId);
+    const queue = guildManager.getQueue();
+    const currentTrack = guildManager.getCurrentTrack();
 
     if (!currentTrack && queue.length === 0) {
-      return interaction.reply('❌ Không có bài hát nào trong hàng đợi.');
+      logger.info(`[QUEUE] User ${interaction.user.tag} checked queue in guild ${interaction.guildId} (empty queue)`);
+      return interaction.reply('Không có bài hát nào trong hàng đợi!');
     }
+
+    logger.info(`[QUEUE] User ${interaction.user.tag} checked queue in guild ${interaction.guildId}`);
 
     const embed = new EmbedBuilder()
       .setTitle('🎵 Hàng đợi phát nhạc')

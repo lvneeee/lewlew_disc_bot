@@ -34,6 +34,7 @@ const {
 } = require('../utils/audioPlayer');
 
 const { setVolumeTransformer } = require('../utils/volumeControl');
+const logger = require('../utils/logger');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -124,10 +125,10 @@ module.exports = {
         if (player.state.status === AudioPlayerStatus.Playing) {
           interaction.channel.send(`🎶 Đang phát: **${next.title}**`);
         }
-      } catch (err) {
-        console.error('Lỗi phát bài:', err);
-        interaction.channel.send(`❌ Không thể phát bài: ${next.title || next.url}`);
-        playNext(guildId); // tiếp tục bài tiếp theo nếu lỗi
+      } catch (error) {
+        logger.error('Error playing next track: ' + error);
+        await interaction.editReply('Có lỗi xảy ra khi phát nhạc!');
+        await playNext(interaction, guildManager);
       }
     };
 
@@ -193,14 +194,9 @@ module.exports = {
             await interaction.editReply(message);
           }
         }
-      } catch (err) {
-        console.error(err);
-        const message = '❌ Lỗi khi thêm bài hát.';
-        if (isFromSearch) {
-          await interaction.followUp(message);
-        } else {
-          await interaction.editReply(message);
-        }
+      } catch (error) {
+        logger.error('Error in play command: ' + error);
+        await interaction.editReply('Có lỗi xảy ra khi phát nhạc!');
       }
     }
   },

@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
+const logger = require('./logger');
 
 // Detect platform and environment
 const isWindows = os.platform() === 'win32';
@@ -28,18 +29,18 @@ function runYtDlp(args, options = {}) {
 
     process.stderr.on('data', (data) => {
       stderr += data.toString();
-      console.error('yt-dlp stderr:', data.toString());
+      logger.error('yt-dlp stderr: ' + data.toString());
     });
 
     process.on('error', (err) => {
-      console.error('yt-dlp spawn error:', err);
+      logger.error('yt-dlp spawn error: ' + err);
       reject(new Error(`Failed to spawn yt-dlp: ${err.message}`));
     });
 
     process.on('close', (code) => {
       console.log('yt-dlp process exited with code:', code);
       if (code !== 0) {
-        console.error('yt-dlp failed with stderr:', stderr);
+        logger.error('yt-dlp failed with stderr: ' + stderr);
         reject(new Error(`yt-dlp exited with code ${code}: ${stderr}`));
         return;
       }
@@ -55,16 +56,18 @@ async function getAudioStream(url) {
       '-o', '-',
       url,
     ], {
-      stdio: ['ignore', 'pipe', 'ignore'], // ẩn stderr
+      stdio: ['ignore', 'pipe', 'ignore'],
       shell: false
     });
 
     process.on('error', (err) => {
+      logger.error('yt-dlp audio stream error: ' + err);
       throw err;
     });
 
     return process.stdout;
   } catch (error) {
+    logger.error('Error in getAudioStream: ' + error);
     throw error;
   }
 }
@@ -80,7 +83,7 @@ async function getVideoInfo(url) {
     
     return output.trim();
   } catch (error) {
-    console.error('Error in getVideoInfo:', error);
+    logger.error('Error in getVideoInfo:', error);
     throw error;
   }
 }
@@ -146,7 +149,7 @@ async function searchVideos(query, limit = 5) {
     });
 
     process.stderr.on('data', (data) => {
-      console.error(`yt-dlp stderr: ${data}`);
+      logger.error(`yt-dlp stderr: ${data}`);
     });
 
     process.on('close', (code) => {
