@@ -72,6 +72,9 @@ module.exports = {
       tracks.forEach(track => guildManager.enqueue(track));
       if (tracks.length > 1) {
         await interaction.editReply(`✅ Đã thêm ${tracks.length} bài vào hàng đợi.`);
+        if (player.state.status !== 'playing' && player.state.status !== 'paused') {
+          await guildManager.playNext(interaction);
+        }
       } else if (player.state.status !== 'playing' && player.state.status !== 'paused') {
         await guildManager.playNext(interaction);
       } else {
