@@ -39,7 +39,7 @@ module.exports = {
       tracks = await resolveSpotifyTrackToYoutube(url);
     }
     if (!tracks.length) {
-      return interaction.editReply('❌ Không lấy được thông tin bài hát từ Spotify hoặc không tìm thấy trên YouTube.');
+      return interaction.editReply('❌ Không lấy được thông tin bài hát từ Spotify. Nếu là playlist, chỉ hỗ trợ tối đa 20 bài đầu tiên.');
     }
     tracks.forEach(track => guildManager.enqueue(track));
     const player = guildManager.getPlayer();

@@ -27,7 +27,7 @@ async function getSpotifyTrackInfo(url) {
   }
 }
 
-async function getSpotifyPlaylistTracks(url) {
+async function getSpotifyPlaylistTracks(url, maxTracks = 20) {
   try {
     const data = await spotifyApi.clientCredentialsGrant();
     spotifyApi.setAccessToken(data.body['access_token']);
@@ -35,12 +35,12 @@ async function getSpotifyPlaylistTracks(url) {
     const match = url.match(/playlist\/([a-zA-Z0-9]+)/);
     if (!match) return [];
     const playlistId = match[1];
-    // Lấy tất cả track trong playlist (Spotify trả về theo trang, cần lặp)
+    // Lấy tối đa maxTracks bài đầu tiên
     let tracks = [];
     let offset = 0;
     let total = 1;
-    while (offset < total) {
-      const res = await spotifyApi.getPlaylistTracks(playlistId, { offset, limit: 100 });
+    while (offset < total && tracks.length < maxTracks) {
+      const res = await spotifyApi.getPlaylistTracks(playlistId, { offset, limit: Math.min(100, maxTracks - tracks.length) });
       total = res.body.total;
       tracks = tracks.concat(res.body.items.map(item => {
         const t = item.track;
@@ -48,7 +48,8 @@ async function getSpotifyPlaylistTracks(url) {
       }).filter(Boolean));
       offset += 100;
     }
-    return tracks;
+    // Cắt nếu vượt quá maxTracks
+    return tracks.slice(0, maxTracks);
   } catch (err) {
     return [];
   }

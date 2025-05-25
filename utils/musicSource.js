@@ -30,14 +30,13 @@ async function resolveSpotifyTrackToYoutube(url) {
 }
 
 async function resolveSpotifyPlaylistToYoutube(url) {
-  const queries = await getSpotifyPlaylistTracks(url);
+  // Lấy tối đa 20 bài đầu tiên
+  const queries = await getSpotifyPlaylistTracks(url, 20);
   if (!queries.length) return [];
-  const results = [];
-  for (const q of queries) {
-    const yt = await resolveYoutubeFromUrlOrQuery(q);
-    if (yt.length) results.push(yt[0]);
-  }
-  return results;
+  // Tìm YouTube song song cho các bài
+  const results = await Promise.all(queries.map(q => resolveYoutubeFromUrlOrQuery(q)));
+  // Lọc ra các bài tìm được
+  return results.map(r => r[0]).filter(Boolean);
 }
 
 module.exports = {
