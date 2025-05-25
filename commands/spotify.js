@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { resolveSpotifyTrackToYoutube } = require('../utils/musicSource');
+const { resolveSpotifyTrackToYoutube, resolveSpotifyPlaylistToYoutube } = require('../utils/musicSource');
 const { getGuildManager } = require('../utils/audioQueue');
 const logger = require('../utils/logger');
 
@@ -31,8 +31,13 @@ module.exports = {
       });
       guildManager.setConnection(connection);
     }
-    // Lấy thông tin bài hát từ Spotify và tìm YouTube
-    const tracks = await resolveSpotifyTrackToYoutube(url);
+    // Kiểm tra là playlist hay track
+    let tracks = [];
+    if (url.includes('playlist/')) {
+      tracks = await resolveSpotifyPlaylistToYoutube(url);
+    } else {
+      tracks = await resolveSpotifyTrackToYoutube(url);
+    }
     if (!tracks.length) {
       return interaction.editReply('❌ Không lấy được thông tin bài hát từ Spotify hoặc không tìm thấy trên YouTube.');
     }
@@ -43,6 +48,6 @@ module.exports = {
     } else {
       await interaction.editReply(`✅ Đã thêm vào hàng đợi: **${tracks[0].title}**`);
     }
-    logger.info(`[SPOTIFY] User ${interaction.user.tag} added Spotify track to queue in guild ${interaction.guildId}: ${tracks[0].title}`);
+    logger.info(`[SPOTIFY] User ${interaction.user.tag} added Spotify track(s) to queue in guild ${interaction.guildId}: ${tracks[0].title}`);
   },
 };

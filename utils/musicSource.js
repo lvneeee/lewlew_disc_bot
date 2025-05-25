@@ -1,7 +1,7 @@
 // utils/musicSource.js
 // Tập trung xử lý các nguồn phát nhạc (YouTube, Spotify)
 const { getAudioStream, getVideoInfo, getPlaylistVideos, searchVideos } = require('./ytdlp');
-const { getSpotifyTrackInfo } = require('./spotify');
+const { getSpotifyTrackInfo, getSpotifyPlaylistTracks } = require('./spotify');
 const ytSearch = require('yt-search');
 
 async function resolveYoutubeFromUrlOrQuery(input) {
@@ -29,7 +29,19 @@ async function resolveSpotifyTrackToYoutube(url) {
   return await resolveYoutubeFromUrlOrQuery(searchQuery);
 }
 
+async function resolveSpotifyPlaylistToYoutube(url) {
+  const queries = await getSpotifyPlaylistTracks(url);
+  if (!queries.length) return [];
+  const results = [];
+  for (const q of queries) {
+    const yt = await resolveYoutubeFromUrlOrQuery(q);
+    if (yt.length) results.push(yt[0]);
+  }
+  return results;
+}
+
 module.exports = {
   resolveYoutubeFromUrlOrQuery,
-  resolveSpotifyTrackToYoutube
+  resolveSpotifyTrackToYoutube,
+  resolveSpotifyPlaylistToYoutube
 };
