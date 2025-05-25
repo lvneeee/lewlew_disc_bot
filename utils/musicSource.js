@@ -2,6 +2,7 @@
 // Tập trung xử lý các nguồn phát nhạc (YouTube, Spotify)
 const { getAudioStream, getVideoInfo, getPlaylistVideos, searchVideos } = require('./ytdlp');
 const { getSpotifyTrackInfo, getSpotifyPlaylistTracks } = require('./spotify');
+const { getSoundCloudTrackInfo } = require('./soundcloud');
 const ytSearch = require('yt-search');
 
 async function resolveYoutubeFromUrlOrQuery(input) {
@@ -39,8 +40,20 @@ async function resolveSpotifyPlaylistToYoutube(url) {
   return results.map(r => r[0]).filter(Boolean);
 }
 
+async function resolveSoundCloudToYoutubeOrStream(url, soundcloudClientId) {
+  // Nếu là link SoundCloud
+  if (/^(https?:\/\/)?(www\.)?soundcloud\.com\//.test(url)) {
+    const info = await getSoundCloudTrackInfo(url, soundcloudClientId);
+    if (!info) return [];
+    // Trả về object đặc biệt để play trực tiếp stream SoundCloud
+    return [{ url: info.url, title: info.title, source: 'soundcloud' }];
+  }
+  return [];
+}
+
 module.exports = {
   resolveYoutubeFromUrlOrQuery,
   resolveSpotifyTrackToYoutube,
-  resolveSpotifyPlaylistToYoutube
+  resolveSpotifyPlaylistToYoutube,
+  resolveSoundCloudToYoutubeOrStream
 };

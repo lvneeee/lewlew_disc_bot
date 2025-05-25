@@ -1,4 +1,5 @@
 const { createAudioPlayer, AudioPlayerStatus } = require('@discordjs/voice');
+const { getSoundCloudStream } = require('../utils/soundcloud');
 
 class GuildAudioManager {
   constructor(guildId) {
@@ -96,9 +97,15 @@ class GuildAudioManager {
     }
     try {
       this.setCurrentTrack(track);
-      const { getAudioStream } = require('../utils/ytdlp');
+      let stream;
+      if (track.source === 'soundcloud') {
+        const clientId = process.env.SOUNDCLOUD_CLIENT_ID || '';
+        stream = await getSoundCloudStream(track.url, clientId);
+      } else {
+        const { getAudioStream } = require('../utils/ytdlp');
+        stream = await getAudioStream(track.url);
+      }
       const { createAudioResource, StreamType } = require('@discordjs/voice');
-      const stream = await getAudioStream(track.url);
       const resource = createAudioResource(stream, {
         inputType: StreamType.Arbitrary,
         inlineVolume: true
