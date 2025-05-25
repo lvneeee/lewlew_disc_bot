@@ -9,7 +9,11 @@ module.exports = {
     async execute(interaction) {
         const guildManager = getGuildManager(interaction.guildId);
         const connection = guildManager.getConnection();
-        if (connection) {
+        // Nếu connection đã bị destroy (do lỗi hoặc disconnect thủ công), reset lại
+        if (connection && connection.state.status === 'destroyed') {
+            guildManager.setConnection(null);
+        }
+        if (guildManager.getConnection()) {
             guildManager.clear(); // Xóa hàng đợi và currentTrack
             guildManager.clearConnection();
             logger.info(`[DISCONNECT] Bot disconnected from voice channel in guild ${interaction.guildId}`);

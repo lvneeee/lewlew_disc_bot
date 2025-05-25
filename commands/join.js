@@ -19,11 +19,20 @@ module.exports = {
                 channelId: voiceChannel.id,
                 guildId: interaction.guildId,
                 adapterCreator: interaction.guild.voiceAdapterCreator,
+                selfDeaf: false, // Đảm bảo bot không bị deaf (tùy nhu cầu)
+                selfMute: false
             });
             guildManager.setConnection(connection);
+            // Lưu connection vào voiceChannel object để debug
+            voiceChannel._lastBotConnection = connection;
             logger.info(`[JOIN] Bot joined voice channel ${voiceChannel.id} in guild ${interaction.guildId}`);
             return interaction.reply('✅ Bot đã vào voice channel!');
         } else {
+            // Nếu đã có connection, kiểm tra xem connection còn hoạt động không
+            if (connection.state.status === 'destroyed') {
+                guildManager.setConnection(null);
+                return interaction.reply('Bot đã bị disconnect trước đó, hãy dùng lại lệnh /join.');
+            }
             return interaction.reply('Bot đã ở trong voice channel!');
         }
     },
