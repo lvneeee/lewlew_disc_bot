@@ -46,12 +46,12 @@ function runYtDlp(args, options = {}) {
 
     process.stdout.on('data', (data) => {
       stdout += data.toString();
+      logger.debug('yt-dlp stdout: ' + data.toString());
     });
 
     process.stderr.on('data', (data) => {
       stderr += data.toString();
-      // Chỉ log debug/info nếu là debug/info, chỉ log error nếu exit code != 0
-      logger.debug('yt-dlp stderr: ' + data.toString());
+      logger.error('yt-dlp stderr: ' + data.toString());
     });
 
     process.on('error', (err) => {
