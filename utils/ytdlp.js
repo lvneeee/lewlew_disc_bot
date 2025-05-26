@@ -146,20 +146,33 @@ async function getAudioStream(url) {
     finalArgs.push(url);
 
     logger.info(`[YTDLP] Running command: ${ytdlpPath} ${finalArgs.join(' ')}`);
-    
-    const process = spawn(ytdlpPath, finalArgs, {
+      const process = spawn(ytdlpPath, finalArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false
     });
 
     let gotData = false;
     let errorOutput = '';
+    let dataBuffer = [];
 
-    process.stdout.once('data', () => {
-      gotData = true;
-      logger.info('[YTDLP] Started receiving audio data');
-      resolve(process.stdout);
+    process.stdout.on('data', (chunk) => {
+      if (!gotData) {
+        gotData = true;
+        logger.info('[YTDLP] Started receiving audio data');
+      }
+      dataBuffer.push(chunk);
     });
+
+    // Chờ một lượng dữ liệu nhất định trước khi bắt đầu phát
+    setTimeout(() => {
+      if (gotData && dataBuffer.length > 0) {
+        const combinedStream = require('stream').Readable.from(Buffer.concat(dataBuffer));
+        combinedStream.on('end', () => {
+          logger.info('[YTDLP] Audio stream ended normally');
+        });
+        resolve(combinedStream);
+      }
+    }, 1000); // Đợi 1 giây để buffer
 
     process.stderr.on('data', (data) => {
       errorOutput += data.toString();
@@ -169,15 +182,14 @@ async function getAudioStream(url) {
     process.on('error', (err) => {
       logger.error(`[YTDLP] Process error: ${err}`);
       reject(err);
-    });
-
-    process.on('close', (code) => {
+    });    process.on('close', (code) => {
       logger.info(`[YTDLP] Process exited with code: ${code}`);
-      if (!gotData) {
-        logger.error(`[YTDLP] No audio data received. Error output: ${errorOutput}`);
+      if (!gotData || dataBuffer.length === 0) {
+        logger.error(`[YTDLP] No audio data received or buffer empty. Error output: ${errorOutput}`);
         reject(new Error(`yt-dlp failed to get audio data. Exit code: ${code}. Error: ${errorOutput}`));
       } else if (code !== 0) {
-        logger.warn(`[YTDLP] Process exited with non-zero code: ${code}`);
+        // Nếu đã có dữ liệu, cho phép tiếp tục dù có lỗi
+        logger.warn(`[YTDLP] Process exited with non-zero code ${code}, but data was received`);
       }
     });
   });
