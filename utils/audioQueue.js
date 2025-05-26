@@ -58,11 +58,34 @@ class GuildAudioManager {
   setConnection(connection) {
     this.connection = connection;
     connection.subscribe(this.player);
-    // Đăng ký log lỗi cho connection
+    
+    // Đăng ký log lỗi và xử lý reconnect cho connection
     if (connection) {
       connection.on('error', (error) => {
         const logger = require('./logger');
         logger.error(`[VOICE CONNECTION ERROR] ${error && error.stack ? error.stack : error}`);
+      });
+
+      // Handle disconnection events
+      connection.on('stateChange', async (oldState, newState) => {
+        const logger = require('./logger');
+        logger.info(`Connection state changed from ${oldState.status} to ${newState.status}`);
+        
+        if (newState.status === 'disconnected') {
+          try {
+            // Try to reconnect if we were playing something
+            if (this.currentTrack) {
+              await Promise.race([
+                connection.rejoin(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Reconnection timeout')), 5000))
+              ]);
+              logger.info('Successfully reconnected to voice channel');
+            }
+          } catch (error) {
+            logger.error('Failed to reconnect:', error);
+            this.clearConnection();
+          }
+        }
       });
     }
   }
@@ -100,10 +123,15 @@ class GuildAudioManager {
   async playNext(interaction) {
     const track = this.dequeue();
     if (!track) {
-      this.clearConnection();
       if (interaction) {
         await interaction.editReply('Hết bài hát trong hàng đợi!');
       }
+      // Add a delay before disconnecting
+      setTimeout(() => {
+        if (this.queue.length === 0 && !this.currentTrack) {
+          this.clearConnection();
+        }
+      }, 5000); // 5 second delay
       return;
     }
     try {
