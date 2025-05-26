@@ -32,6 +32,14 @@ if (!ytdlpPath) {
 const ytdlpCookiesPath = config.ytdlpCookiesPath || './youtube_cookies.txt';
 
 function runYtDlp(args, options = {}) {
+  // Thêm extractor-args để thử lấy audio chất lượng cao hơn nếu thiếu PO Token
+  if (!args.some(arg => arg.includes('formats=missing_pot'))) {
+    args = [
+      '--extractor-args', 'youtube:formats=missing_pot',
+      ...args
+    ];
+  }
+
   if (config.ytdlpVisitorData && !isWindows) {
     args = [
       '--extractor-args',
@@ -65,8 +73,14 @@ function runYtDlp(args, options = {}) {
     });
 
     process.stderr.on('data', (data) => {
+      // Lọc log: chỉ log các dòng không phải debug/info
+      const lines = data.toString().split('\n');
+      for (const line of lines) {
+        if (line && !line.startsWith('[debug]') && !line.startsWith('[info]')) {
+          logger.error('yt-dlp stderr: ' + line);
+        }
+      }
       stderr += data.toString();
-      logger.error('yt-dlp stderr: ' + data.toString());
     });
 
     process.on('error', (err) => {
@@ -91,7 +105,6 @@ async function getAudioStream(url) {
     const process = spawn(ytdlpPath, [
       '-f', 'bestaudio',
       '-o', '-',
-      '--verbose',
       url,
     ], {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -125,7 +138,6 @@ async function getVideoInfo(url) {
     const output = await runYtDlp([
       '--no-playlist',
       '--print', '%(title)s',
-      '--verbose',
       url
     ]);
 
