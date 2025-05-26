@@ -1,30 +1,46 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
+const which = require('which');
 const logger = require('./logger');
 const config = require('../config/config');
 
-// Detect platform and environment
+// Detect platform
 const isWindows = os.platform() === 'win32';
 
-// Set appropriate yt-dlp executable path and validate it exists
-const ytdlpPath = config.ytdlpPath || (isWindows ? path.join(__dirname, '..', 'yt-dlp.exe') : '/usr/local/bin/yt-dlp');
+// Resolve yt-dlp path
+let ytdlpPath = config.ytdlpPath;
+
+if (!ytdlpPath) {
+  if (isWindows) {
+    ytdlpPath = path.join(__dirname, '..', 'yt-dlp.exe');
+    if (!fs.existsSync(ytdlpPath)) {
+      console.error(`Không tìm thấy yt-dlp.exe tại: ${ytdlpPath}`);
+      process.exit(1);
+    }
+  } else {
+    try {
+      ytdlpPath = which.sync('yt-dlp');
+    } catch (err) {
+      console.error('Không tìm thấy yt-dlp trong hệ thống. Cài đặt bằng: pip install yt-dlp hoặc tải từ GitHub.');
+      process.exit(1);
+    }
+  }
+}
+
 const ytdlpCookiesPath = config.ytdlpCookiesPath || './youtube_cookies.txt';
 
-// Helper function to run yt-dlp with error handling
 function runYtDlp(args, options = {}) {
-  // Nếu có visitor data, dùng visitor data thay cho cookies
   if (config.ytdlpVisitorData && !isWindows) {
     args = [
       '--extractor-args',
-      `youtubetab:skip=webpage`,
+      'youtubetab:skip=webpage',
       '--extractor-args',
       `youtube:player_skip=webpage,configs;visitor_data=${config.ytdlpVisitorData}`,
       ...args.filter(arg => arg !== '--cookies' && !arg.includes('youtube_cookies.txt'))
     ];
   } else {
-    // Thêm cookies nếu file tồn tại
-    const fs = require('fs');
     if (fs.existsSync(ytdlpCookiesPath)) {
       args = [
         '--cookies', ytdlpCookiesPath,
@@ -32,6 +48,7 @@ function runYtDlp(args, options = {}) {
       ];
     }
   }
+
   return new Promise((resolve, reject) => {
     const process = spawn(ytdlpPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -99,7 +116,6 @@ async function getAudioStream(url) {
       } else if (code !== 0) {
         reject(new Error('yt-dlp exited with code ' + code));
       }
-      // Nếu đã resolve ở trên thì không làm gì nữa
     });
   });
 }
@@ -112,7 +128,7 @@ async function getVideoInfo(url) {
       '--verbose',
       url
     ]);
-    
+
     return output.trim();
   } catch (error) {
     logger.error('Error in getVideoInfo:', error);
@@ -134,9 +150,8 @@ function getPlaylistVideos(playlistUrl) {
 
     process.stdout.on('data', (chunk) => {
       dataBuffer += chunk.toString();
-      // yt-dlp dump-json xuất từng dòng là 1 json video
       let lines = dataBuffer.split('\n');
-      dataBuffer = lines.pop(); // giữ phần dư cuối chưa đủ 1 dòng
+      dataBuffer = lines.pop();
 
       for (const line of lines) {
         if (line.trim() === '') continue;
@@ -146,14 +161,12 @@ function getPlaylistVideos(playlistUrl) {
             url: `https://www.youtube.com/watch?v=${json.id}`,
             title: json.title,
           });
-        } catch (e) {
-          // lỗi parse json, bỏ qua
-        }
+        } catch (e) {}
       }
     });
 
     process.stderr.on('data', (data) => {
-      // có thể log nếu cần
+      // Log nếu cần
     });
 
     process.on('close', (code) => {
