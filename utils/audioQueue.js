@@ -77,7 +77,7 @@ class GuildAudioManager {
             if (this.currentTrack) {
               await Promise.race([
                 connection.rejoin(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Reconnection timeout')), 5000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Reconnection timeout')), 15000))
               ]);
               logger.info('Successfully reconnected to voice channel');
             }
