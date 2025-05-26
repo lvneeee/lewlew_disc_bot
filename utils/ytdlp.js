@@ -39,7 +39,8 @@ function runYtDlp(args, options = {}) {
 
     process.stderr.on('data', (data) => {
       stderr += data.toString();
-      logger.error('yt-dlp stderr: ' + data.toString());
+      // Chỉ log debug/info nếu là debug/info, chỉ log error nếu exit code != 0
+      logger.debug('yt-dlp stderr: ' + data.toString());
     });
 
     process.on('error', (err) => {
@@ -48,7 +49,7 @@ function runYtDlp(args, options = {}) {
     });
 
     process.on('close', (code) => {
-      console.log('yt-dlp process exited with code:', code);
+      logger.info('yt-dlp process exited with code: ' + code);
       if (code !== 0) {
         logger.error('yt-dlp failed with stderr: ' + stderr);
         reject(new Error(`yt-dlp exited with code ${code}: ${stderr}`));
