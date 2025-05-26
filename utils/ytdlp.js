@@ -2,17 +2,27 @@ const { spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
 const logger = require('./logger');
+const config = require('../config/config');
 
 // Detect platform and environment
 const isWindows = os.platform() === 'win32';
 const isDocker = process.env.RAILWAY_STATIC_URL !== undefined;
 
 // Set appropriate yt-dlp executable path and validate it exists
-const ytdlpPath = isDocker ? '/usr/local/bin/yt-dlp' : 
-    isWindows ? path.join(__dirname, '..', 'yt-dlp.exe') : '/usr/bin/yt-dlp';
+const ytdlpPath = config.ytdlpPath || (isDocker ? '/usr/local/bin/yt-dlp' : 
+    isWindows ? path.join(__dirname, '..', 'yt-dlp.exe') : '/usr/bin/yt-dlp');
+const ytdlpCookiesPath = config.ytdlpCookiesPath || './youtube_cookies.txt';
 
 // Helper function to run yt-dlp with error handling
 function runYtDlp(args, options = {}) {
+  // Thêm cookies nếu file tồn tại
+  const fs = require('fs');
+  if (fs.existsSync(ytdlpCookiesPath)) {
+    args = [
+      '--cookies', ytdlpCookiesPath,
+      ...args
+    ];
+  }
   return new Promise((resolve, reject) => {
     const process = spawn(ytdlpPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
