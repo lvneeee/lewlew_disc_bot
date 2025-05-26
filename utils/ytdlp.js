@@ -62,13 +62,6 @@ function runYtDlp(args, options = {}) {
   } else {
     logger.warn('[YTDLP] No authentication method available');
   }
-    if (fs.existsSync(ytdlpCookiesPath)) {
-      args = [
-        '--cookies', ytdlpCookiesPath,
-        ...args
-      ];
-    }
-  }
 
   return new Promise((resolve, reject) => {
     const process = spawn(ytdlpPath, args, {
@@ -116,7 +109,7 @@ function runYtDlp(args, options = {}) {
       resolve(stdout);
     });
   });
-
+}
 
 async function getAudioStream(url) {
   const logger = require('./logger');
@@ -124,39 +117,37 @@ async function getAudioStream(url) {
   
   return new Promise((resolve, reject) => {
     // Tạo mảng args với các tùy chọn cơ bản
-    let args = [
+    let finalArgs = [
       '-f', 'bestaudio',
       '-o', '-',
       '--no-warnings'
     ];
 
     // Thêm extractor-args để thử lấy audio chất lượng cao hơn
-    args = [
+    finalArgs = [
       '--extractor-args', 'youtube:formats=missing_pot',
-      ...args
-    ];
-
-    // Trên Linux, sử dụng visitor data thay vì cookies
-    if (config.ytdlpVisitorData && !isWindows) {
-      args = [
+      ...finalArgs
+    ];    // Ưu tiên sử dụng cookies nếu có
+    if (fs.existsSync(ytdlpCookiesPath)) {
+      finalArgs = ['--cookies', ytdlpCookiesPath, ...finalArgs];
+      logger.info('[YTDLP] Using cookies file for authentication');
+    }
+    // Nếu không có cookies và có visitor_data (trên Linux), sử dụng visitor_data
+    else if (config.ytdlpVisitorData && !isWindows) {
+      finalArgs = [
         '--extractor-args',
         'youtubetab:skip=webpage',
         '--extractor-args',
         `youtube:player_skip=webpage,configs;visitor_data=${config.ytdlpVisitorData}`,
-        ...args
+        ...finalArgs
       ];
       logger.info('[YTDLP] Using visitor data for authentication');
-    } else if (fs.existsSync(ytdlpCookiesPath)) {
-      args = ['--cookies', ytdlpCookiesPath, ...args];
-      logger.info('[YTDLP] Using cookies file for authentication');
-    }
+    }    // Thêm URL vào cuối
+    finalArgs.push(url);
 
-    // Thêm URL vào cuối
-    args.push(url);
-
-    logger.info(`[YTDLP] Running command: ${ytdlpPath} ${args.join(' ')}`);
+    logger.info(`[YTDLP] Running command: ${ytdlpPath} ${finalArgs.join(' ')}`);
     
-    const process = spawn(ytdlpPath, args, {
+    const process = spawn(ytdlpPath, finalArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false
     });
@@ -209,13 +200,31 @@ async function getVideoInfo(url) {
 
 function getPlaylistVideos(playlistUrl) {
   return new Promise((resolve, reject) => {
-    const videos = [];
-    const process = spawn(ytdlpPath, [
+    // Tạo args cơ bản
+    let finalArgs = [
       '--yes-playlist',
       '--flat-playlist',
-      '--dump-json',
-      playlistUrl,
-    ]);
+      '--dump-json'
+    ];
+
+    // Thêm xác thực nếu có
+    if (fs.existsSync(ytdlpCookiesPath)) {
+      finalArgs = ['--cookies', ytdlpCookiesPath, ...finalArgs];
+    } else if (config.ytdlpVisitorData && !isWindows) {
+      finalArgs = [
+        '--extractor-args',
+        'youtubetab:skip=webpage',
+        '--extractor-args',
+        `youtube:player_skip=webpage,configs;visitor_data=${config.ytdlpVisitorData}`,
+        ...finalArgs
+      ];
+    }
+
+    // Thêm URL
+    finalArgs.push(playlistUrl);
+
+    const videos = [];
+    const process = spawn(ytdlpPath, finalArgs);
 
     let dataBuffer = '';
 
@@ -252,11 +261,27 @@ function getPlaylistVideos(playlistUrl) {
 
 async function searchVideos(query, limit = 5) {
   return new Promise((resolve, reject) => {
-    const process = spawn(ytdlpPath, [
+    // Tạo args cơ bản
+    let finalArgs = [
       'ytsearch' + limit + ':' + query,
       '--flat-playlist',
       '--dump-json'
-    ]);
+    ];
+
+    // Thêm xác thực nếu có
+    if (fs.existsSync(ytdlpCookiesPath)) {
+      finalArgs = ['--cookies', ytdlpCookiesPath, ...finalArgs];
+    } else if (config.ytdlpVisitorData && !isWindows) {
+      finalArgs = [
+        '--extractor-args',
+        'youtubetab:skip=webpage',
+        '--extractor-args',
+        `youtube:player_skip=webpage,configs;visitor_data=${config.ytdlpVisitorData}`,
+        ...finalArgs
+      ];
+    }
+
+    const process = spawn(ytdlpPath, finalArgs);
 
     let dataBuffer = '';
 
