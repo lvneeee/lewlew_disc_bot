@@ -4,19 +4,9 @@ const {
   createAudioResource,
   StreamType,
 } = require('@discordjs/voice');
-const prism = require('prism-media');
-const { spawn } = require('child_process');
-const ffmpegPath = require('ffmpeg-static');
-
-const {
-  getAudioStream,
-  getVideoInfo,
-  getPlaylistVideos,
-} = require('../utils/ytdlp');
-const { resolveYoutubeFromUrlOrQuery } = require('../utils/musicSource');
-
-const { getGuildManager } = require('../utils/audioQueue');
 const logger = require('../utils/logger');
+const { resolveYoutubeFromUrlOrQuery } = require('../utils/musicSource');
+const { getGuildManager } = require('../utils/audioQueue');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -37,7 +27,10 @@ module.exports = {
     const url = directUrl || interaction.options.getString('url');
     const voiceChannel = interaction.member.voice.channel;
     
+    logger.info(`[PLAY] Processing play command for URL: ${url}`);
+    
     if (!voiceChannel) {
+      logger.warn(`[PLAY] User ${interaction.user.tag} tried to play without joining a voice channel`);
       return isFromSearch 
         ? interaction.followUp('❗ Bạn phải vào voice channel trước.')
         : interaction.editReply('❗ Bạn phải vào voice channel trước.');
@@ -46,8 +39,11 @@ module.exports = {
     const guildId = interaction.guildId;
     const guildManager = getGuildManager(guildId);
     guildManager.setLastInteraction(interaction);
+
+    // Kiểm tra và thiết lập kết nối
     let connection = guildManager.getConnection();
     if (!connection) {
+      logger.info(`[PLAY] Creating new voice connection in guild ${guildId}`);
       connection = joinVoiceChannel({
         channelId: voiceChannel.id,
         guildId: interaction.guildId,
@@ -57,31 +53,45 @@ module.exports = {
     }
 
     let player = guildManager.getPlayer();
-    // Nếu player đang paused thì resume (unpause)
+    logger.info(`[PLAY] Current player status: ${player.state.status}`);
+
+    // Nếu player đang paused thì resume
     if (player.state.status === 'paused') {
+      logger.info(`[PLAY] Resuming paused player in guild ${guildId}`);
       player.unpause();
       return interaction.editReply('▶️ Tiếp tục phát nhạc.');
     }
 
-    // Xử lý mọi nguồn phát (YouTube link, playlist, query)
+    // Xử lý nguồn nhạc
     try {
+      logger.info(`[PLAY] Resolving tracks from input: ${url}`);
       const tracks = await resolveYoutubeFromUrlOrQuery(url);
+      
       if (!tracks.length) {
+        logger.warn(`[PLAY] No tracks found for input: ${url}`);
         return interaction.editReply('❌ Không tìm thấy hoặc không phát được nguồn nhạc.');
       }
-      tracks.forEach(track => guildManager.enqueue(track));
+
+      logger.info(`[PLAY] Found ${tracks.length} tracks, adding to queue`);
+      tracks.forEach(track => {
+        guildManager.enqueue(track);
+        logger.info(`[PLAY] Added track to queue: ${track.title}`);
+      });
+
       if (tracks.length > 1) {
         await interaction.editReply(`✅ Đã thêm ${tracks.length} bài vào hàng đợi.`);
         if (player.state.status !== 'playing' && player.state.status !== 'paused') {
+          logger.info(`[PLAY] Starting playlist playback in guild ${guildId}`);
           await guildManager.playNext(interaction);
         }
       } else if (player.state.status !== 'playing' && player.state.status !== 'paused') {
+        logger.info(`[PLAY] Starting single track playback in guild ${guildId}`);
         await guildManager.playNext(interaction);
       } else {
         await interaction.editReply(`✅ Đã thêm vào hàng đợi: **${tracks[0].title}**`);
       }
     } catch (err) {
-      logger.error('Lỗi khi phát nhạc: ' + err);
+      logger.error(`[PLAY] Error in guild ${guildId}: ${err}`);
       await interaction.editReply('❌ Lỗi khi phát nhạc.');
     }
   },

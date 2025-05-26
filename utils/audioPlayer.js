@@ -1,16 +1,51 @@
 const { AudioPlayer, AudioPlayerStatus } = require('@discordjs/voice');
+const logger = require('./logger');
 
 const players = new Map();
 const connections = new Map();
 const disconnectTimeouts = new Map();
 
 function createPlayer(guildId, onIdleCallback) {
-  if (players.has(guildId)) return players.get(guildId);
+  if (players.has(guildId)) {
+    logger.info(`[PLAYER] Reusing existing player for guild ${guildId}`);
+    return players.get(guildId);
+  }
 
   const player = new AudioPlayer();
+  logger.info(`[PLAYER] Created new player for guild ${guildId}`);
+
+  // Log all player state changes
+  player.on('stateChange', (oldState, newState) => {
+    logger.info(`[PLAYER] State changed from ${oldState.status} to ${newState.status} in guild ${guildId}`);
+    
+    if (oldState.status !== newState.status) {
+      switch (newState.status) {
+        case AudioPlayerStatus.Playing:
+          logger.info(`[PLAYER] Started playing in guild ${guildId}`);
+          break;
+        case AudioPlayerStatus.Paused:
+          logger.info(`[PLAYER] Paused in guild ${guildId}`);
+          break;
+        case AudioPlayerStatus.Idle:
+          logger.info(`[PLAYER] Became idle in guild ${guildId}`);
+          break;
+        case AudioPlayerStatus.Buffering:
+          logger.info(`[PLAYER] Buffering in guild ${guildId}`);
+          break;
+      }
+    }
+  });
+
+  // Register error handler
+  player.on('error', error => {
+    logger.error(`[PLAYER] Error in guild ${guildId}: ${error.message}`);
+  });
 
   if (onIdleCallback) {
-    player.on(AudioPlayerStatus.Idle, () => onIdleCallback(guildId));
+    player.on(AudioPlayerStatus.Idle, () => {
+      logger.info(`[PLAYER] Triggering idle callback for guild ${guildId}`);
+      onIdleCallback(guildId);
+    });
   }
 
   players.set(guildId, player);
