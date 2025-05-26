@@ -112,9 +112,10 @@ class GuildAudioManager {
       }
     } catch (error) {
       const logger = require('./logger');
-      logger.error('Error playing next track: ' + error);
+      logger.error('Error playing next track: ' + error.stack || error);
+      logger.error('Track info: ' + JSON.stringify(track));
       if (interaction) {
-        await interaction.editReply('Có lỗi xảy ra khi phát nhạc!');
+        await interaction.editReply('Có lỗi xảy ra khi phát nhạc!\n' + (error && error.message ? error.message : error));
       }
       await this.playNext(interaction);
     }
