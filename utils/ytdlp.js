@@ -32,23 +32,36 @@ if (!ytdlpPath) {
 const ytdlpCookiesPath = config.ytdlpCookiesPath || './youtube_cookies.txt';
 
 function runYtDlp(args, options = {}) {
-  // Thêm extractor-args để thử lấy audio chất lượng cao hơn nếu thiếu PO Token
-  if (!args.some(arg => arg.includes('formats=missing_pot'))) {
-    args = [
-      '--extractor-args', 'youtube:formats=missing_pot',
-      ...args
-    ];
-  }
+  const logger = require('./logger');
+  logger.info('[YTDLP] Running with options:', { args, hasCookies: fs.existsSync(ytdlpCookiesPath) });
 
-  if (config.ytdlpVisitorData && !isWindows) {
-    args = [
+  // Base arguments with format selection
+  let finalArgs = [
+    '--extractor-args', 'youtube:formats=missing_pot',
+    ...args
+  ];
+
+  // Kiểm tra và thêm cookies nếu có
+  if (fs.existsSync(ytdlpCookiesPath)) {
+    logger.info('[YTDLP] Using cookies file');
+    finalArgs = [
+      '--cookies', ytdlpCookiesPath,
+      ...finalArgs
+    ];
+  } 
+  // Nếu không có cookies và có visitor_data, sử dụng visitor_data
+  else if (config.ytdlpVisitorData && !isWindows) {
+    logger.info('[YTDLP] No cookies found, using visitor data');
+    finalArgs = [
       '--extractor-args',
       'youtubetab:skip=webpage',
       '--extractor-args',
       `youtube:player_skip=webpage,configs;visitor_data=${config.ytdlpVisitorData}`,
-      ...args.filter(arg => arg !== '--cookies' && !arg.includes('youtube_cookies.txt'))
+      ...finalArgs
     ];
   } else {
+    logger.warn('[YTDLP] No authentication method available');
+  }
     if (fs.existsSync(ytdlpCookiesPath)) {
       args = [
         '--cookies', ytdlpCookiesPath,
@@ -103,7 +116,7 @@ function runYtDlp(args, options = {}) {
       resolve(stdout);
     });
   });
-}
+
 
 async function getAudioStream(url) {
   const logger = require('./logger');
