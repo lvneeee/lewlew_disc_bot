@@ -1,5 +1,4 @@
 const { createAudioPlayer, AudioPlayerStatus } = require('@discordjs/voice');
-const { getSoundCloudStream } = require('../utils/soundcloud');
 
 class GuildAudioManager {
   constructor(guildId) {
@@ -97,14 +96,9 @@ class GuildAudioManager {
     }
     try {
       this.setCurrentTrack(track);
-      let stream;
-      if (track.source === 'soundcloud') {
-        const clientId = process.env.SOUNDCLOUD_CLIENT_ID || '';
-        stream = await getSoundCloudStream(track.url, clientId);
-      } else {
-        const { getAudioStream } = require('../utils/ytdlp');
-        stream = await getAudioStream(track.url);
-      }
+      // Chỉ còn phát YouTube (và các nguồn hợp pháp khác nếu có)
+      const { getAudioStream } = require('../utils/ytdlp');
+      const stream = await getAudioStream(track.url);
       const { createAudioResource, StreamType } = require('@discordjs/voice');
       const resource = createAudioResource(stream, {
         inputType: StreamType.Arbitrary,
