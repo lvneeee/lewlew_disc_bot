@@ -9,7 +9,9 @@ class GuildAudioManager {
     this.connection = null;
     this.volume = 1;
     this.lastInteraction = null;
-    this.connectAttempts = 0; // Khởi tạo biến đếm số lần kết nối
+    this.connectAttempts = 0;
+    this.maxConnectAttempts = 5;
+    this.connectionTimeout = null;
 
     // Đăng ký sự kiện idle để tự động phát tiếp bài tiếp theo
     this.player.on(AudioPlayerStatus.Idle, async () => {
@@ -35,6 +37,11 @@ class GuildAudioManager {
   clear() {
     this.queue = [];
     this.currentTrack = null;
+    this.connectAttempts = 0;
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
+    }
   }
 
   removeAt(index) {
@@ -73,42 +80,53 @@ class GuildAudioManager {
         const logger = require('./logger');
         logger.info(`Connection state changed from ${oldState.status} to ${newState.status}`);
         
-        // Tăng số lần thử khi trạng thái chuyển sang connecting
+        // Theo dõi số lần thử kết nối
         if (newState.status === 'connecting') {
           this.connectAttempts++;
-          logger.info(`Attempting to connect... (attempt ${this.connectAttempts})`);
+          logger.info(`[Queue] Đang thử kết nối lần ${this.connectAttempts}/${this.maxConnectAttempts}`);
+          
+          // Tăng thời gian chờ theo cấp số nhân
+          const timeout = Math.min(1000 * Math.pow(2, this.connectAttempts - 1), 10000);
+          this.connectionTimeout = setTimeout(() => {
+            if (newState.status === 'connecting') {
+              logger.warn('[Queue] Kết nối bị timeout, đang thử lại...');
+              connection.rejoin();
+            }
+          }, timeout);
         }
         
-        // Reset số lần thử khi kết nối thành công
+        // Reset bộ đếm khi kết nối thành công
         if (newState.status === 'ready') {
-          logger.info(`Connection established after ${this.connectAttempts} attempts`);
+          logger.info('[Queue] Kết nối voice đã sẵn sàng');
           this.connectAttempts = 0;
+          if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+          }
         }
         
+        // Xử lý ngắt kết nối
         if (newState.status === 'disconnected') {
-          try {
-            // Try to reconnect if we were playing something
-            if (this.currentTrack) {
-              // Tăng thời gian timeout theo số lần thử
-              const timeoutMs = Math.min(15000 * this.connectAttempts, 60000);
-              
-              await Promise.race([
-                connection.rejoin(),
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error(`Reconnection timeout after ${timeoutMs}ms`)), timeoutMs)
-                )
-              ]);
-              
-              logger.info('Successfully reconnected to voice channel');
+          logger.warn('[Queue] Kết nối voice bị ngắt');
+          
+          if (this.connectAttempts < this.maxConnectAttempts) {
+            logger.info('[Queue] Đang thử kết nối lại...');
+            try {
+              newState.rejoin();
+            } catch (error) {
+              logger.error(`[Queue] Không thể kết nối lại: ${error}`);
             }
-          } catch (error) {
-            logger.error(`Failed to reconnect (attempt ${this.connectAttempts}):`, error);
-            if (this.connectAttempts >= 3) { // Sau 3 lần thử
-              logger.error('Max reconnection attempts reached, clearing connection');
-              this.clearConnection();
-              this.connectAttempts = 0;
-            }
+          } else {
+            logger.error('[Queue] Đã vượt quá số lần thử kết nối tối đa, hủy kết nối');
+            this.clearConnection();
+            this.connectAttempts = 0;
           }
+        }
+
+        // Xử lý trạng thái đã hủy
+        if (newState.status === 'destroyed') {
+          logger.info('[Queue] Kết nối voice đã bị hủy, đang dọn dẹp');
+          this.clear();
         }
       });
     }
