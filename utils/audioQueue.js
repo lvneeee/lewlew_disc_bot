@@ -71,19 +71,37 @@ class GuildAudioManager {
         const logger = require('./logger');
         logger.info(`Connection state changed from ${oldState.status} to ${newState.status}`);
         
+        // Thêm log chi tiết cho trạng thái connecting
+        if (newState.status === 'connecting') {
+          logger.info(`Attempting to connect... (attempt ${this._connectAttempts || 1})`);
+        }
+        
         if (newState.status === 'disconnected') {
           try {
             // Try to reconnect if we were playing something
             if (this.currentTrack) {
+              this._connectAttempts = (this._connectAttempts || 0) + 1;
+              
+              // Tăng thời gian timeout nếu số lần thử kết nối tăng
+              const timeoutMs = Math.min(15000 * this._connectAttempts, 60000);
+              
               await Promise.race([
                 connection.rejoin(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Reconnection timeout')), 15000))
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error(`Reconnection timeout after ${timeoutMs}ms`)), timeoutMs)
+                )
               ]);
+              
               logger.info('Successfully reconnected to voice channel');
+              this._connectAttempts = 0; // Reset số lần thử khi thành công
             }
           } catch (error) {
-            logger.error('Failed to reconnect:', error);
-            this.clearConnection();
+            logger.error(`Failed to reconnect (attempt ${this._connectAttempts}):`, error);
+            if (this._connectAttempts >= 3) { // Sau 3 lần thử
+              logger.error('Max reconnection attempts reached, clearing connection');
+              this.clearConnection();
+              this._connectAttempts = 0;
+            }
           }
         }
       });
