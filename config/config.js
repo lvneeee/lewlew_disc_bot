@@ -10,4 +10,6 @@ module.exports = {
   ytdlpCookiesPath: process.env.YTDLP_COOKIES_PATH || './youtube_cookies.txt',
   spotifyClientId: process.env.SPOTIFY_CLIENT_ID,
   spotifyClientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+  // Visitor Data config for yt-dlp (bypass cookies)
+  ytdlpVisitorData: process.env.YTDLP_VISITOR_DATA || '',
 };

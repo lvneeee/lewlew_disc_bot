@@ -15,13 +15,24 @@ const ytdlpCookiesPath = config.ytdlpCookiesPath || './youtube_cookies.txt';
 
 // Helper function to run yt-dlp with error handling
 function runYtDlp(args, options = {}) {
-  // Thêm cookies nếu file tồn tại
-  const fs = require('fs');
-  if (fs.existsSync(ytdlpCookiesPath)) {
+  // Nếu có visitor data, dùng visitor data thay cho cookies
+  if (config.ytdlpVisitorData) {
     args = [
-      '--cookies', ytdlpCookiesPath,
-      ...args
+      '--extractor-args',
+      `youtubetab:skip=webpage`,
+      '--extractor-args',
+      `youtube:player_skip=webpage,configs;visitor_data=${config.ytdlpVisitorData}`,
+      ...args.filter(arg => arg !== '--cookies' && !arg.includes('youtube_cookies.txt'))
     ];
+  } else {
+    // Thêm cookies nếu file tồn tại
+    const fs = require('fs');
+    if (fs.existsSync(ytdlpCookiesPath)) {
+      args = [
+        '--cookies', ytdlpCookiesPath,
+        ...args
+      ];
+    }
   }
   return new Promise((resolve, reject) => {
     const process = spawn(ytdlpPath, args, {
