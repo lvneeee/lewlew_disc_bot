@@ -65,6 +65,7 @@ async function getAudioStream(url) {
     const process = spawn(ytdlpPath, [
       '-f', 'bestaudio',
       '-o', '-',
+      '--verbose',
       url,
     ], {
       stdio: ['ignore', 'pipe', 'pipe'],

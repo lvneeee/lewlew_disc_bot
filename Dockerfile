@@ -1,4 +1,7 @@
-FROM node:18-bullseye
+FROM node:18-bookworm-slim
+
+# Update all packages to their latest versions to reduce vulnerabilities
+RUN apt-get update && apt-get dist-upgrade -y && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -34,6 +37,9 @@ RUN npm ci || npm install --no-optional
 
 # Copy the rest of the application
 COPY . .
+
+# Copy youtube_cookies.txt for yt-dlp authentication
+COPY youtube_cookies.txt ./youtube_cookies.txt
 
 # Set environment variable for Node
 ENV NODE_OPTIONS="--no-experimental-fetch"
