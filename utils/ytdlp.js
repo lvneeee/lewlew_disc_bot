@@ -61,26 +61,37 @@ function runYtDlp(args, options = {}) {
 }
 
 async function getAudioStream(url) {
-  try {
+  return new Promise((resolve, reject) => {
     const process = spawn(ytdlpPath, [
       '-f', 'bestaudio',
       '-o', '-',
       url,
     ], {
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
       shell: false
+    });
+
+    let gotData = false;
+
+    process.stdout.once('data', () => {
+      gotData = true;
+      resolve(process.stdout);
     });
 
     process.on('error', (err) => {
       logger.error('yt-dlp audio stream error: ' + err);
-      throw err;
+      reject(err);
     });
 
-    return process.stdout;
-  } catch (error) {
-    logger.error('Error in getAudioStream: ' + error);
-    throw error;
-  }
+    process.on('close', (code) => {
+      if (!gotData) {
+        reject(new Error('yt-dlp did not return any audio data.'));
+      } else if (code !== 0) {
+        reject(new Error('yt-dlp exited with code ' + code));
+      }
+      // Nếu đã resolve ở trên thì không làm gì nữa
+    });
+  });
 }
 
 async function getVideoInfo(url) {
