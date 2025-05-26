@@ -6,11 +6,9 @@ const config = require('../config/config');
 
 // Detect platform and environment
 const isWindows = os.platform() === 'win32';
-const isDocker = process.env.RAILWAY_STATIC_URL !== undefined;
 
 // Set appropriate yt-dlp executable path and validate it exists
-const ytdlpPath = config.ytdlpPath || (isDocker ? '/usr/local/bin/yt-dlp' : 
-    isWindows ? path.join(__dirname, '..', 'yt-dlp.exe') : '/usr/bin/yt-dlp');
+const ytdlpPath = config.ytdlpPath || (isWindows ? path.join(__dirname, '..', 'yt-dlp.exe') : '/usr/local/bin/yt-dlp');
 const ytdlpCookiesPath = config.ytdlpCookiesPath || './youtube_cookies.txt';
 
 // Helper function to run yt-dlp with error handling
