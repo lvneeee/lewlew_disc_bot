@@ -35,9 +35,6 @@ RUN npm ci || npm install --no-optional
 # Copy the rest of the application
 COPY . .
 
-# Copy .env file for environment variables (for local Docker builds)
-COPY .env .env
-
 # Set environment variable for Node
 ENV NODE_OPTIONS="--no-experimental-fetch"
 
