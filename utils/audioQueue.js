@@ -16,6 +16,11 @@ class GuildAudioManager {
         await this.playNext(this.lastInteraction);
       } catch (e) {}
     });
+    // Đăng ký log lỗi cho player
+    this.player.on('error', (error) => {
+      const logger = require('./logger');
+      logger.error(`[AUDIO PLAYER ERROR] ${error && error.stack ? error.stack : error}`);
+    });
   }
 
   enqueue(track) {
@@ -53,6 +58,13 @@ class GuildAudioManager {
   setConnection(connection) {
     this.connection = connection;
     connection.subscribe(this.player);
+    // Đăng ký log lỗi cho connection
+    if (connection) {
+      connection.on('error', (error) => {
+        const logger = require('./logger');
+        logger.error(`[VOICE CONNECTION ERROR] ${error && error.stack ? error.stack : error}`);
+      });
+    }
   }
 
   getConnection() {
