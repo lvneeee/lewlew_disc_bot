@@ -16,7 +16,7 @@ const ytdlpCookiesPath = config.ytdlpCookiesPath || './youtube_cookies.txt';
 // Helper function to run yt-dlp with error handling
 function runYtDlp(args, options = {}) {
   // Nếu có visitor data, dùng visitor data thay cho cookies
-  if (config.ytdlpVisitorData) {
+  if (config.ytdlpVisitorData && !isWindows) {
     args = [
       '--extractor-args',
       `youtubetab:skip=webpage`,
