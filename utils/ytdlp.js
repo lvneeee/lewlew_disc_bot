@@ -113,7 +113,8 @@ function runYtDlp(args, options = {}) {
 
 async function getAudioStream(url) {
   const logger = require('./logger');
-  logger.info(`[YTDLP] Getting audio stream for: ${url}`);
+  const { PassThrough } = require('stream');
+  logger.info(`[YTDLP] Bắt đầu tải xuống audio từ: ${url}`);
   
   return new Promise((resolve, reject) => {
     // Tạo mảng args với các tùy chọn cơ bản
@@ -127,10 +128,12 @@ async function getAudioStream(url) {
     finalArgs = [
       '--extractor-args', 'youtube:formats=missing_pot',
       ...finalArgs
-    ];    // Ưu tiên sử dụng cookies nếu có
+    ];
+
+    // Ưu tiên sử dụng cookies nếu có
     if (fs.existsSync(ytdlpCookiesPath)) {
       finalArgs = ['--cookies', ytdlpCookiesPath, ...finalArgs];
-      logger.info('[YTDLP] Using cookies file for authentication');
+      logger.info('[YTDLP] Đang sử dụng file cookies để xác thực');
     }
     // Nếu không có cookies và có visitor_data (trên Linux), sử dụng visitor_data
     else if (config.ytdlpVisitorData && !isWindows) {
@@ -141,55 +144,73 @@ async function getAudioStream(url) {
         `youtube:player_skip=webpage,configs;visitor_data=${config.ytdlpVisitorData}`,
         ...finalArgs
       ];
-      logger.info('[YTDLP] Using visitor data for authentication');
-    }    // Thêm URL vào cuối
+      logger.info('[YTDLP] Đang sử dụng visitor_data để xác thực');
+    } else {
+      logger.warn('[YTDLP] Không có phương thức xác thực nào được cấu hình');
+    }
+
+    // Thêm URL vào cuối
     finalArgs.push(url);
 
-    logger.info(`[YTDLP] Running command: ${ytdlpPath} ${finalArgs.join(' ')}`);
-      const process = spawn(ytdlpPath, finalArgs, {
+    logger.info(`[YTDLP] Thực thi lệnh: ${ytdlpPath} ${finalArgs.join(' ')}`);
+    
+    const process = spawn(ytdlpPath, finalArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false
     });
 
+    const passThrough = new PassThrough();
     let gotData = false;
     let errorOutput = '';
-    let dataBuffer = [];
+    let dataSize = 0;
 
     process.stdout.on('data', (chunk) => {
+      dataSize += chunk.length;
       if (!gotData) {
         gotData = true;
-        logger.info('[YTDLP] Started receiving audio data');
+        logger.info('[YTDLP] Đã bắt đầu nhận dữ liệu audio');
+        resolve(passThrough);
       }
-      dataBuffer.push(chunk);
+      
+      try {
+        passThrough.write(chunk);
+      } catch (err) {
+        logger.error(`[YTDLP] Lỗi khi ghi dữ liệu vào stream: ${err}`);
+        passThrough.destroy(err);
+      }
     });
 
-    // Chờ một lượng dữ liệu nhất định trước khi bắt đầu phát
-    setTimeout(() => {
-      if (gotData && dataBuffer.length > 0) {
-        const combinedStream = require('stream').Readable.from(Buffer.concat(dataBuffer));
-        combinedStream.on('end', () => {
-          logger.info('[YTDLP] Audio stream ended normally');
-        });
-        resolve(combinedStream);
-      }
-    }, 1000); // Đợi 1 giây để buffer
-
     process.stderr.on('data', (data) => {
-      errorOutput += data.toString();
-      logger.warn(`[YTDLP] Warning/Error output: ${data.toString().trim()}`);
+      const message = data.toString().trim();
+      errorOutput += message + '\n';
+      
+      // Chỉ log các lỗi quan trọng
+      if (!message.startsWith('[debug]') && 
+          !message.startsWith('[info]') && 
+          !message.startsWith('WARNING:')) {
+        logger.warn(`[YTDLP] Cảnh báo/Lỗi: ${message}`);
+      }
     });
 
     process.on('error', (err) => {
-      logger.error(`[YTDLP] Process error: ${err}`);
-      reject(err);
-    });    process.on('close', (code) => {
-      logger.info(`[YTDLP] Process exited with code: ${code}`);
-      if (!gotData || dataBuffer.length === 0) {
-        logger.error(`[YTDLP] No audio data received or buffer empty. Error output: ${errorOutput}`);
-        reject(new Error(`yt-dlp failed to get audio data. Exit code: ${code}. Error: ${errorOutput}`));
-      } else if (code !== 0) {
-        // Nếu đã có dữ liệu, cho phép tiếp tục dù có lỗi
-        logger.warn(`[YTDLP] Process exited with non-zero code ${code}, but data was received`);
+      const error = new Error(`Lỗi khi khởi chạy yt-dlp: ${err.message}`);
+      logger.error(`[YTDLP] ${error.message}`);
+      passThrough.destroy(error);
+      if (!gotData) {
+        reject(error);
+      }
+    });
+
+    process.on('close', (code) => {
+      logger.info(`[YTDLP] Tiến trình kết thúc với mã: ${code}`);
+      if (!gotData) {
+        const error = new Error(`yt-dlp không thể tải audio. Mã lỗi: ${code}. Chi tiết: ${errorOutput}`);
+        logger.error(`[YTDLP] ${error.message}`);
+        reject(error);
+      } else {
+        logger.info(`[YTDLP] Đã tải xuống thành công ${(dataSize / 1024 / 1024).toFixed(2)}MB audio`);
+        passThrough.end();
+        logger.info('[YTDLP] Stream audio đã kết thúc bình thường');
       }
     });
   });
