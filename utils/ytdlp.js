@@ -73,10 +73,15 @@ function runYtDlp(args, options = {}) {
     });
 
     process.stderr.on('data', (data) => {
-      // Lọc log: chỉ log các dòng không phải debug/info
+      // Lọc log: chỉ log các dòng không phải debug/info/warning
       const lines = data.toString().split('\n');
       for (const line of lines) {
-        if (line && !line.startsWith('[debug]') && !line.startsWith('[info]')) {
+        if (
+          line &&
+          !line.startsWith('[debug]') &&
+          !line.startsWith('[info]') &&
+          !line.startsWith('WARNING:')
+        ) {
           logger.error('yt-dlp stderr: ' + line);
         }
       }
