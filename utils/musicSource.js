@@ -5,21 +5,36 @@ const { getSpotifyTrackInfo, getSpotifyPlaylistTracks } = require('./spotify');
 const ytSearch = require('yt-search');
 
 async function resolveYoutubeFromUrlOrQuery(input) {
+  const logger = require('./logger');
+  logger.info(`[MUSIC SOURCE] Processing input: ${input}`);
+
   // Nếu là link YouTube hoặc playlist
   if (/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//.test(input)) {
+    logger.info('[MUSIC SOURCE] Input is a YouTube URL');
+    
     if (input.includes('list=')) {
       // Playlist
+      logger.info('[MUSIC SOURCE] Processing YouTube playlist');
       const videos = await getPlaylistVideos(input);
+      logger.info(`[MUSIC SOURCE] Found ${videos.length} videos in playlist`);
       return videos.map(v => ({ url: v.url, title: v.title }));
     } else {
       // Video đơn
+      logger.info('[MUSIC SOURCE] Processing single YouTube video');
       const title = await getVideoInfo(input);
+      logger.info(`[MUSIC SOURCE] Video title: ${title}`);
       return [{ url: input, title }];
     }
   }
+  
   // Nếu là query (từ Spotify hoặc search)
+  logger.info('[MUSIC SOURCE] Input is a search query, searching YouTube');
   const ytResult = await ytSearch(input);
-  if (!ytResult.videos.length) return [];
+  if (!ytResult.videos.length) {
+    logger.warn('[MUSIC SOURCE] No videos found for query');
+    return [];
+  }
+  logger.info(`[MUSIC SOURCE] Found video: ${ytResult.videos[0].title}`);
   return [{ url: ytResult.videos[0].url, title: ytResult.videos[0].title }];
 }
 

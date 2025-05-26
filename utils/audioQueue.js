@@ -9,6 +9,7 @@ class GuildAudioManager {
     this.connection = null;
     this.volume = 1;
     this.lastInteraction = null;
+    this.connectAttempts = 0; // Khởi tạo biến đếm số lần kết nối
 
     // Đăng ký sự kiện idle để tự động phát tiếp bài tiếp theo
     this.player.on(AudioPlayerStatus.Idle, async () => {
@@ -57,6 +58,7 @@ class GuildAudioManager {
 
   setConnection(connection) {
     this.connection = connection;
+    this.connectAttempts = 0; // Reset số lần thử khi có kết nối mới
     connection.subscribe(this.player);
     
     // Đăng ký log lỗi và xử lý reconnect cho connection
@@ -71,19 +73,24 @@ class GuildAudioManager {
         const logger = require('./logger');
         logger.info(`Connection state changed from ${oldState.status} to ${newState.status}`);
         
-        // Thêm log chi tiết cho trạng thái connecting
+        // Tăng số lần thử khi trạng thái chuyển sang connecting
         if (newState.status === 'connecting') {
-          logger.info(`Attempting to connect... (attempt ${this._connectAttempts || 1})`);
+          this.connectAttempts++;
+          logger.info(`Attempting to connect... (attempt ${this.connectAttempts})`);
+        }
+        
+        // Reset số lần thử khi kết nối thành công
+        if (newState.status === 'ready') {
+          logger.info(`Connection established after ${this.connectAttempts} attempts`);
+          this.connectAttempts = 0;
         }
         
         if (newState.status === 'disconnected') {
           try {
             // Try to reconnect if we were playing something
             if (this.currentTrack) {
-              this._connectAttempts = (this._connectAttempts || 0) + 1;
-              
-              // Tăng thời gian timeout nếu số lần thử kết nối tăng
-              const timeoutMs = Math.min(15000 * this._connectAttempts, 60000);
+              // Tăng thời gian timeout theo số lần thử
+              const timeoutMs = Math.min(15000 * this.connectAttempts, 60000);
               
               await Promise.race([
                 connection.rejoin(),
@@ -93,14 +100,13 @@ class GuildAudioManager {
               ]);
               
               logger.info('Successfully reconnected to voice channel');
-              this._connectAttempts = 0; // Reset số lần thử khi thành công
             }
           } catch (error) {
-            logger.error(`Failed to reconnect (attempt ${this._connectAttempts}):`, error);
-            if (this._connectAttempts >= 3) { // Sau 3 lần thử
+            logger.error(`Failed to reconnect (attempt ${this.connectAttempts}):`, error);
+            if (this.connectAttempts >= 3) { // Sau 3 lần thử
               logger.error('Max reconnection attempts reached, clearing connection');
               this.clearConnection();
-              this._connectAttempts = 0;
+              this.connectAttempts = 0;
             }
           }
         }
@@ -139,39 +145,64 @@ class GuildAudioManager {
   }
 
   async playNext(interaction) {
+    const logger = require('./logger');
+    logger.info(`[QUEUE] Current queue length: ${this.queue.length}`);
+    
     const track = this.dequeue();
     if (!track) {
+      logger.info('[QUEUE] No track found in queue');
       if (interaction) {
         await interaction.editReply('Hết bài hát trong hàng đợi!');
       }
       // Add a delay before disconnecting
       setTimeout(() => {
         if (this.queue.length === 0 && !this.currentTrack) {
+          logger.info('[QUEUE] Queue empty and no current track, clearing connection');
           this.clearConnection();
         }
-      }, 5000); // 5 second delay
+      }, 5000);
       return;
     }
+    
+    logger.info(`[QUEUE] Starting playback of track: ${track.title} (${track.url})`);
     try {
       this.setCurrentTrack(track);
       // Chỉ còn phát YouTube (và các nguồn hợp pháp khác nếu có)
       const { getAudioStream } = require('../utils/ytdlp');
+      logger.info(`[YTDLP] Fetching audio stream for: ${track.url}`);
       const stream = await getAudioStream(track.url);
+      
+      if (!stream) {
+        logger.error('[YTDLP] Failed to get audio stream - stream is null');
+        throw new Error('Failed to get audio stream');
+      }
+      
       const { createAudioResource, StreamType } = require('@discordjs/voice');
       const resource = createAudioResource(stream, {
         inputType: StreamType.Arbitrary,
         inlineVolume: true
       });
+      
+      if (!resource) {
+        logger.error('[PLAYER] Failed to create audio resource');
+        throw new Error('Failed to create audio resource');
+      }
+      
       resource.volume.setVolume(this.getVolume());
       const player = this.getPlayer();
+      
+      // Kiểm tra trạng thái player trước khi phát
+      logger.info(`[PLAYER] Current player status: ${player.state.status}`);
+      
       player.play(resource);
+      logger.info(`[PLAYER] Started playing: ${track.title}`);
+      
       if (interaction) {
         await interaction.editReply(`🎵 Đang phát: **${track.title}**`);
       }
     } catch (error) {
-      const logger = require('./logger');
-      logger.error('Error playing next track: ' + error.stack || error);
-      logger.error('Track info: ' + JSON.stringify(track));
+      logger.error(`[ERROR] Error playing next track: ${error.stack || error}`);
+      logger.error(`[ERROR] Track info: ${JSON.stringify(track)}`);
       if (interaction) {
         await interaction.editReply('Có lỗi xảy ra khi phát nhạc!\n' + (error && error.message ? error.message : error));
       }

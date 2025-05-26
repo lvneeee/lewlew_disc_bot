@@ -106,33 +106,74 @@ function runYtDlp(args, options = {}) {
 }
 
 async function getAudioStream(url) {
+  const logger = require('./logger');
+  logger.info(`[YTDLP] Getting audio stream for: ${url}`);
+  
   return new Promise((resolve, reject) => {
-    const process = spawn(ytdlpPath, [
+    // Tạo mảng args với các tùy chọn cơ bản
+    let args = [
       '-f', 'bestaudio',
       '-o', '-',
-      url,
-    ], {
+      '--no-warnings'
+    ];
+
+    // Thêm extractor-args để thử lấy audio chất lượng cao hơn
+    args = [
+      '--extractor-args', 'youtube:formats=missing_pot',
+      ...args
+    ];
+
+    // Trên Linux, sử dụng visitor data thay vì cookies
+    if (config.ytdlpVisitorData && !isWindows) {
+      args = [
+        '--extractor-args',
+        'youtubetab:skip=webpage',
+        '--extractor-args',
+        `youtube:player_skip=webpage,configs;visitor_data=${config.ytdlpVisitorData}`,
+        ...args
+      ];
+      logger.info('[YTDLP] Using visitor data for authentication');
+    } else if (fs.existsSync(ytdlpCookiesPath)) {
+      args = ['--cookies', ytdlpCookiesPath, ...args];
+      logger.info('[YTDLP] Using cookies file for authentication');
+    }
+
+    // Thêm URL vào cuối
+    args.push(url);
+
+    logger.info(`[YTDLP] Running command: ${ytdlpPath} ${args.join(' ')}`);
+    
+    const process = spawn(ytdlpPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false
     });
 
     let gotData = false;
+    let errorOutput = '';
 
     process.stdout.once('data', () => {
       gotData = true;
+      logger.info('[YTDLP] Started receiving audio data');
       resolve(process.stdout);
     });
 
+    process.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+      logger.warn(`[YTDLP] Warning/Error output: ${data.toString().trim()}`);
+    });
+
     process.on('error', (err) => {
-      logger.error('yt-dlp audio stream error: ' + err);
+      logger.error(`[YTDLP] Process error: ${err}`);
       reject(err);
     });
 
     process.on('close', (code) => {
+      logger.info(`[YTDLP] Process exited with code: ${code}`);
       if (!gotData) {
-        reject(new Error('yt-dlp did not return any audio data.'));
+        logger.error(`[YTDLP] No audio data received. Error output: ${errorOutput}`);
+        reject(new Error(`yt-dlp failed to get audio data. Exit code: ${code}. Error: ${errorOutput}`));
       } else if (code !== 0) {
-        reject(new Error('yt-dlp exited with code ' + code));
+        logger.warn(`[YTDLP] Process exited with non-zero code: ${code}`);
       }
     });
   });
