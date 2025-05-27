@@ -12,12 +12,24 @@ class GuildAudioManager {
     this.connectAttempts = 0;
     this.maxConnectAttempts = 5;
     this.connectionTimeout = null;
+    this.disconnectTimeout = null; // Thêm biến để theo dõi timeout disconnect
+    this.isLooping = false; // Thêm biến theo dõi trạng thái loop
 
     // Đăng ký sự kiện idle để tự động phát tiếp bài tiếp theo
     this.player.on(AudioPlayerStatus.Idle, async () => {
       try {
-        await this.playNext(this.lastInteraction);
-      } catch (e) {}
+        if (this.isLooping && this.currentTrack) {
+          // Nếu đang ở chế độ loop, phát lại bài hiện tại
+          await this.playTrack(this.currentTrack, this.lastInteraction);
+        } else if (this.queue.length > 0) {
+          await this.playNext(this.lastInteraction);
+        } else {
+          this.scheduleDisconnect();
+        }
+      } catch (e) {
+        const logger = require('./logger');
+        logger.error(`[QUEUE] Error in idle event handler: ${e}`);
+      }
     });
     // Đăng ký log lỗi cho player
     this.player.on('error', (error) => {
@@ -42,6 +54,10 @@ class GuildAudioManager {
       clearTimeout(this.connectionTimeout);
       this.connectionTimeout = null;
     }
+    if (this.disconnectTimeout) {
+      clearTimeout(this.disconnectTimeout);
+      this.disconnectTimeout = null;
+    }
   }
 
   removeAt(index) {
@@ -53,6 +69,21 @@ class GuildAudioManager {
 
   getQueue() {
     return [...this.queue];
+  }
+
+  shuffle() {
+    const logger = require('./logger');
+    // Nếu queue trống hoặc chỉ có 1 bài, không cần xáo trộn
+    if (this.queue.length <= 1) return false;
+
+    // Thuật toán Fisher-Yates để xáo trộn mảng
+    for (let i = this.queue.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [this.queue[i], this.queue[j]] = [this.queue[j], this.queue[i]];
+    }
+
+    logger.info(`[QUEUE] Shuffled ${this.queue.length} tracks in queue`);
+    return true;
   }
 
   setCurrentTrack(track) {
@@ -162,36 +193,50 @@ class GuildAudioManager {
     this.lastInteraction = interaction;
   }
 
-  async playNext(interaction) {
+  // Thêm phương thức mới để xử lý việc tự động ngắt kết nối
+  scheduleDisconnect() {
     const logger = require('./logger');
-    logger.info(`[QUEUE] Current queue length: ${this.queue.length}`);
-    
-    const track = this.dequeue();
-    if (!track) {
-      logger.info('[QUEUE] No track found in queue');
-      if (interaction) {
-        await interaction.editReply('Hết bài hát trong hàng đợi!');
-      }
-      // Add a delay before disconnecting
-      setTimeout(() => {
-        if (this.queue.length === 0 && !this.currentTrack) {
-          logger.info('[QUEUE] Queue empty and no current track, clearing connection');
-          this.clearConnection();
-        }
-      }, 5000);
-      return;
+    // Xóa timeout cũ nếu có
+    if (this.disconnectTimeout) {
+      clearTimeout(this.disconnectTimeout);
     }
     
+    // Đặt timeout mới để ngắt kết nối sau 10 giây nếu không có bài hát nào được phát
+    this.disconnectTimeout = setTimeout(() => {
+      if (this.queue.length === 0 && !this.currentTrack && this.connection) {
+        logger.info(`[QUEUE] Auto disconnecting due to inactivity in guild ${this.guildId}`);
+        this.clearConnection();
+        this.clear();
+      }
+    }, 180000); // 3p
+  }
+
+  // Thêm các phương thức điều khiển loop
+  setLoop(value) {
+    this.isLooping = value;
+  }
+
+  getLoop() {
+    return this.isLooping;
+  }
+
+  toggleLoop() {
+    this.isLooping = !this.isLooping;
+    return this.isLooping;
+  }
+
+  // Tách logic phát nhạc thành một hàm riêng để tái sử dụng
+  async playTrack(track, interaction) {
+    const logger = require('./logger');
     logger.info(`[QUEUE] Starting playback of track: ${track.title} (${track.url})`);
+    
     try {
       this.setCurrentTrack(track);
-      // Chỉ còn phát YouTube (và các nguồn hợp pháp khác nếu có)
       const { getAudioStream } = require('../utils/ytdlp');
       logger.info(`[YTDLP] Fetching audio stream for: ${track.url}`);
       const stream = await getAudioStream(track.url);
       
       if (!stream) {
-        logger.error('[YTDLP] Failed to get audio stream - stream is null');
         throw new Error('Failed to get audio stream');
       }
       
@@ -202,30 +247,48 @@ class GuildAudioManager {
       });
       
       if (!resource) {
-        logger.error('[PLAYER] Failed to create audio resource');
         throw new Error('Failed to create audio resource');
       }
       
       resource.volume.setVolume(this.getVolume());
       const player = this.getPlayer();
       
-      // Kiểm tra trạng thái player trước khi phát
       logger.info(`[PLAYER] Current player status: ${player.state.status}`);
-      
       player.play(resource);
       logger.info(`[PLAYER] Started playing: ${track.title}`);
       
       if (interaction) {
-        await interaction.editReply(`🎵 Đang phát: **${track.title}**`);
+        await interaction.editReply(`🎵 Đang phát: **${track.title}**${this.isLooping ? ' 🔁' : ''}`);
       }
     } catch (error) {
-      logger.error(`[ERROR] Error playing next track: ${error.stack || error}`);
-      logger.error(`[ERROR] Track info: ${JSON.stringify(track)}`);
+      logger.error(`[ERROR] Error playing track: ${error.stack || error}`);
       if (interaction) {
-        await interaction.editReply('Có lỗi xảy ra khi phát nhạc!\n' + (error && error.message ? error.message : error));
+        await interaction.editReply('Có lỗi xảy ra khi phát nhạc!\n' + (error.message || error));
+      }
+      // Nếu đang loop mà gặp lỗi thì tắt loop để tránh lặp lại lỗi
+      if (this.isLooping) {
+        this.setLoop(false);
       }
       await this.playNext(interaction);
     }
+  }
+
+  async playNext(interaction) {
+    const logger = require('./logger');
+    logger.info(`[QUEUE] Current queue length: ${this.queue.length}`);
+    
+    const track = this.dequeue();
+    if (!track) {
+      logger.info('[QUEUE] No track found in queue');
+      if (interaction) {
+        await interaction.editReply('Hết bài hát trong hàng đợi!');
+      }
+      this.currentTrack = null;
+      this.scheduleDisconnect();
+      return;
+    }
+    
+    await this.playTrack(track, interaction);
   }
 }
 
