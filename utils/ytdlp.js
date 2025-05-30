@@ -64,7 +64,7 @@ function runYtDlp(args, options = {}) {
   }
 
   return new Promise((resolve, reject) => {
-    const process = spawn(ytdlpPath, args, {
+    const process = spawn(ytdlpPath, finalArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
       ...options
