@@ -36,4 +36,23 @@ async function deploySlashCommands(token, clientId) {
   }
 }
 
-module.exports = { deploySlashCommands };
+async function clearGlobalCommands(token, clientId) {
+  if (!token || !clientId) {
+    throw new Error('TOKEN và CLIENT_ID không được để trống!');
+  }
+  const rest = new REST({ version: '10' }).setToken(token);
+  try {
+    console.log('Đang xóa toàn bộ lệnh global...');
+    await rest.put(
+      Routes.applicationCommands(clientId),
+      { body: [] }
+    );
+    console.log('✅ Đã xóa toàn bộ lệnh global!');
+    return true;
+  } catch (error) {
+    console.error('❌ Lỗi khi xóa lệnh global:', error);
+    return false;
+  }
+}
+
+module.exports = { deploySlashCommands, clearGlobalCommands };
